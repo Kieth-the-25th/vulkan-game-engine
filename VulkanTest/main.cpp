@@ -10,22 +10,20 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-#define STB_IMAGE_IMPLEMENTATION
-#include <stb_image.h>
+#include <vector>
+#include <string>
+#include <set>
 
 #include <chrono>
-
 #include <iostream>
 #include <fstream>
 #include <stdexcept>
-#include <cstdlib>
-#include <cstdint>
 #include <algorithm>
 #include <optional>
-#include <vector>
-#include <string>
-#include <cstring>
-#include <set>
+
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
+
 
 const uint32_t WIDTH = 1600;
 const uint32_t HEIGHT = 1200;
@@ -336,7 +334,7 @@ private:
         }
 
         if (vkCreateInstance(&createInfo, nullptr, &instance) != VK_SUCCESS) {
-            std::runtime_error("fail.");
+            std::runtime_error("failure creating instance");
         }
     }
 

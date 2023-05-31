@@ -1,37 +1,43 @@
 #pragma once
 
-#include <cstdlib>
+#include <vector>
 #include "render.h"
+#include "btBulletDynamicsCommon.h"
+#include "btBulletCollisionCommon.h"
 
-float timestep;
+/* renderer component */
 
-renderobject::Camera mainCamera;
+struct Renderer {
+	uint32_t objectIndex;
+	render::Mesh* mesh;
+	render::Material* material;
 
-std::vector<renderobject::Material> materials;
+	Renderer();
+};
 
-class scene {
-	btDefaultCollisionConfiguration* defaultConfig = new btDefaultCollisionConfiguration();
+class Scene {
+private:
+	float timestep;
 
-	btCollisionDispatcher* dispatcher = new btCollisionDispatcher(defaultConfig);
+	render::Camera mainCamera;
 
-	btBroadphaseInterface* pairCache = new btDbvtBroadphase();
+	render::Drawer drawer;
 
-	btSequentialImpulseConstraintSolver* solver = new btSequentialImpulseConstraintSolver();
+	btDefaultCollisionConfiguration* defaultConfig;
 
-	btDiscreteDynamicsWorld* world = new btDiscreteDynamicsWorld(dispatcher, pairCache, solver, defaultConfig);
-	btDynamicsWorld* w;
+	btCollisionDispatcher* dispatcher;
 
-	/* renderer component */
-	struct renderer {
-		int objectIndex;
-		renderobject::Mesh* mesh;
-		renderobject::Material* material;
-	};
+	btBroadphaseInterface* pairCache;
 
-	std::vector<renderer> renderedScene;
+	btSequentialImpulseConstraintSolver* solver;
 
-	scene();
+	btDiscreteDynamicsWorld* world;
+	
+	std::vector<Renderer> renderedScene;
 
+	Scene();
+
+	void addRigidBody(btTransform transform = btTransform(btQuaternion()));
+	void attachRenderer(Renderer component);
 	void drawObjects();
-	void drawFrame();
 };

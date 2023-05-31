@@ -114,7 +114,7 @@ namespace util {
             this->transferQueue = queue;
         }
 
-        void transfer(uint32_t usageFlags, VkDeviceSize size, const void* src, VkBuffer* dst, VkCommandPool* commandPool) {
+        void transfer(uint32_t usageFlags, VkDeviceSize size, const void* src, VkBuffer* dst, const VkCommandPool* commandPool) {
             createBuffer(device, physicalDevice, size, usageFlags, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingMemory);
 
             void* stage;

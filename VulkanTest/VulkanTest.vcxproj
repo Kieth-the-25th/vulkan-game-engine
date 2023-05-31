@@ -102,16 +102,22 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>
+      </PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>C:\Users\agent\source\repos\VulkanTest\VulkanTest\lib;C:\GLFW\glfw-3.3.8.bin.WIN64\include;C:\VulkanSDK\1.3.239.0\Include;C:\Program Files %28x86%29\ReactPhysics3D\include;D:\Desktop\bullet3-3.25\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\agent\source\repos\VulkanTest\VulkanTest\lib;C:\GLFW\glfw-3.3.8.bin.WIN64\include;C:\VulkanSDK\1.3.239.0\Include;C:\Program Files %28x86%29\BULLET_PHYSICS\include\bullet;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>C:\VulkanSDK\1.3.239.0\Lib;C:\GLFW\glfw-3.3.8.bin.WIN64\lib-vc2022;C:\Program Files %28x86%29\ReactPhysics3D\lib;C:\Program Files %28x86%29\BULLET_PHYSICS\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>vulkan-1.lib;glfw3.lib;reactphysics3d.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\VulkanSDK\1.3.239.0\Lib;C:\GLFW\glfw-3.3.8.bin.WIN64\lib-vc2022;C:\bullet\lib\Release;C:\Program Files %28x86%29\BULLET_PHYSICS\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>vulkan-1.lib;glfw3.lib;Bullet3Common.lib;Bullet3Collision.lib;BulletCollision.lib;Bullet3Dynamics.lib;BulletDynamics.lib;Bullet3Geometry.lib;BulletSoftBody.lib;LinearMath.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <IgnoreAllDefaultLibraries>
+      </IgnoreAllDefaultLibraries>
+      <IgnoreSpecificDefaultLibraries>
+      </IgnoreSpecificDefaultLibraries>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -120,18 +126,24 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>
+      </PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>C:\Users\agent\source\repos\VulkanTest\VulkanTest\lib;C:\GLFW\glfw-3.3.8.bin.WIN64\include;C:\VulkanSDK\1.3.239.0\Include;C:\Program Files %28x86%29\ReactPhysics3D\include;D:\Desktop\bullet3-3.25\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\agent\source\repos\VulkanTest\VulkanTest\lib;C:\GLFW\glfw-3.3.8.bin.WIN64\include;C:\VulkanSDK\1.3.239.0\Include;C:\Program Files %28x86%29\BULLET_PHYSICS\include\bullet;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>C:\VulkanSDK\1.3.239.0\Lib;C:\GLFW\glfw-3.3.8.bin.WIN64\lib-vc2022;C:\Program Files %28x86%29\ReactPhysics3D\lib;C:\Program Files %28x86%29\BULLET_PHYSICS\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>vulkan-1.lib;glfw3.lib;reactphysics3d.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\VulkanSDK\1.3.239.0\Lib;C:\GLFW\glfw-3.3.8.bin.WIN64\lib-vc2022;C:\bullet\lib\Release;C:\Program Files %28x86%29\BULLET_PHYSICS\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>vulkan-1.lib;glfw3.lib;Bullet3Common.lib;Bullet3Collision.lib;BulletCollision.lib;Bullet3Dynamics.lib;BulletDynamics.lib;Bullet3Geometry.lib;BulletSoftBody.lib;LinearMath.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <IgnoreAllDefaultLibraries>
+      </IgnoreAllDefaultLibraries>
+      <IgnoreSpecificDefaultLibraries>
+      </IgnoreSpecificDefaultLibraries>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
