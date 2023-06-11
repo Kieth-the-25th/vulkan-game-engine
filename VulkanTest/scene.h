@@ -12,7 +12,7 @@ struct Renderer {
 	render::Mesh* mesh;
 	render::Material* material;
 
-	Renderer();
+	Renderer(render::Material* material, render::Mesh* mesh, uint32_t object);
 };
 
 class Scene {
@@ -21,7 +21,7 @@ private:
 
 	render::Camera mainCamera;
 
-	render::Drawer drawer;
+	render::Drawer* drawer;
 
 	btDefaultCollisionConfiguration* defaultConfig;
 
@@ -33,11 +33,14 @@ private:
 
 	btDiscreteDynamicsWorld* world;
 	
+	btAlignedObjectArray<btCollisionShape*> collisionShapes;
 	std::vector<Renderer> renderedScene;
 
-	Scene();
+public:
+	Scene(render::Drawer* drawer);
 
-	void addRigidBody(btTransform transform = btTransform(btQuaternion()));
+	void step();
+	void addRigidBody(btRigidBody::btRigidBodyConstructionInfo info);
 	void attachRenderer(Renderer component);
 	void drawObjects();
 };

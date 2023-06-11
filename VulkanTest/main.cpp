@@ -24,6 +24,9 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
+#include "render.h"
+#include "scene.h"
+
 
 const uint32_t WIDTH = 1600;
 const uint32_t HEIGHT = 1200;
@@ -239,7 +242,7 @@ private:
         createRenderPass();
         createDescSetLayout();
         createGraphicsPipeline();
-        createCommandPool();
+        createCommandPool(); //
         createDepthStuff();
         createFramebuffers();
         createTexture();
@@ -1068,15 +1071,6 @@ private:
             imageInfo.imageView = textureImgView;
             imageInfo.sampler = texSampler;
 
-            VkWriteDescriptorSet write{};
-            write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            write.descriptorCount = 1;
-            write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-            write.dstSet = descSets[i];
-            write.dstArrayElement = 0;
-            write.dstBinding = 0;
-            write.pBufferInfo = &bInfo;
-
             std::vector<VkWriteDescriptorSet> descriptorWrites{};
             descriptorWrites.resize(2);
 
@@ -1673,7 +1667,7 @@ private:
     }
 };
 
-int main() {
+int tutorialmain() {
     BasicTriangle app;
 
     try {
@@ -1682,6 +1676,44 @@ int main() {
     catch (const std::exception& e) {
         std::cerr << e.what() << std::endl;
         return EXIT_FAILURE;
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int main() {
+    render::Drawer d{};
+    d.init();
+    Scene s{ &d };
+    std::cout << "Finished initialization\n";
+    btTransform start1({0, 0, 0, 1}, { 0, 0, 0 });
+    btTransform start2({0, 0, 0, 1}, { -1, -2, 0 });
+    btMotionState* state = new btDefaultMotionState{start1};
+    btMotionState* state2 = new btDefaultMotionState{start2};
+    btTransform t{};
+    state->getWorldTransform(t);
+    std::cout << state << "\n";
+    btBoxShape box({0.5, 0.5, 0.5});
+    btBoxShape box2({0.5, 0.5, 0.5});
+    s.addRigidBody(btRigidBody::btRigidBodyConstructionInfo{ 100, state, &box });
+    s.addRigidBody(btRigidBody::btRigidBodyConstructionInfo{ 100, state2, &box2 });
+    //s.addRigidBody(btTransform(), btRigidBody::btRigidBodyConstructionInfo{ 1, &state2, &box2, {1, 1, 1} });
+
+    //s.addRigidBody(btTransform(btMatrix3x3(), {0, 0, 0}), btRigidBody::btRigidBodyConstructionInfo{ 1, &state2, &box2, {1, 1, 1} });
+
+    //s.addRigidBody(btTransform(btMatrix3x3(), {1, 1, 1}), btRigidBody::btRigidBodyConstructionInfo{ 1, &state, &box, {1, 1, 1} });
+
+    std::cout << d.registeredMeshes[0].vBufferSize << "\n";
+    std::cout << d.registeredMeshes[0].iBufferSize << "\n";
+
+    s.attachRenderer(Renderer(&(d.registeredMaterials[0]), &(d.registeredMeshes[0]), 0));
+    s.attachRenderer(Renderer(&(d.registeredMaterials[0]), &(d.registeredMeshes[0]), 1));
+    //s.attachRenderer(Renderer(&(d.registeredMaterials[0]), &(d.registeredMeshes[0]), 1));
+
+    while (!glfwWindowShouldClose(d.window)) {
+        glfwPollEvents();
+        s.step();
+        s.drawObjects();
     }
 
     return EXIT_SUCCESS;

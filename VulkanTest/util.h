@@ -2,7 +2,9 @@
 
 #include <stdexcept>
 #include <cstdlib>
-#include <cstdint>
+#include <iostream>
+#include <fstream>
+#include <vector>
 #include <vulkan/vulkan.h>
 
 /*
@@ -10,8 +12,8 @@
  * Memory management, math, vulkan config
  */
 
-inline VkCommandBuffer beginSimpleCommands(VkDevice device, VkCommandPool commandPool) {
-    VkCommandBuffer buffer;
+inline static VkCommandBuffer beginSimpleCommands(VkDevice device, VkCommandPool commandPool) {
+    VkCommandBuffer buffer{};
 
     VkCommandBufferAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -98,6 +100,61 @@ inline void destroyBuffer(VkDevice device, VkBuffer buffer, VkDeviceMemory memor
     vkFreeMemory(device, memory, nullptr);
 }
 
+inline void createImage(VkDevice device, VkPhysicalDevice physicalDevice, uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory) {
+    VkImageCreateInfo imageInfo{};
+    imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    imageInfo.imageType = VK_IMAGE_TYPE_2D;
+    imageInfo.extent.width = width;
+    imageInfo.extent.height = height;
+    imageInfo.extent.depth = 1;
+    imageInfo.mipLevels = 1;
+    imageInfo.arrayLayers = 1;
+    imageInfo.format = format;
+    imageInfo.tiling = tiling;
+    imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    imageInfo.usage = usage;
+    imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    if (vkCreateImage(device, &imageInfo, nullptr, &image) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create image!");
+    }
+
+    VkMemoryRequirements memRequirements;
+    vkGetImageMemoryRequirements(device, image, &memRequirements);
+
+    VkMemoryAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = memRequirements.size;
+    allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, physicalDevice, properties);
+
+    if (vkAllocateMemory(device, &allocInfo, nullptr, &imageMemory) != VK_SUCCESS) {
+        throw std::runtime_error("failed to allocate image memory!");
+    }
+
+    vkBindImageMemory(device, image, imageMemory, 0);
+}
+
+
+inline static std::vector<char> getBytes(const char* fileName) {
+    std::ifstream fileStream(fileName, std::ios::ate | std::ios::binary);
+
+    if (!fileStream.is_open()) {
+        throw std::runtime_error("Could not open file");
+    }
+
+    size_t fileSize = fileStream.tellg();
+    std::cout << "File size: " << fileSize << "\n";
+
+    std::vector<char> r(fileSize);
+
+    fileStream.seekg(0);
+    fileStream.read(r.data(), fileSize);
+    fileStream.close();
+
+    return r;
+}
+
 namespace util {
     class staging {
     private:
@@ -114,8 +171,8 @@ namespace util {
             this->transferQueue = queue;
         }
 
-        void transfer(uint32_t usageFlags, VkDeviceSize size, const void* src, VkBuffer* dst, const VkCommandPool* commandPool) {
-            createBuffer(device, physicalDevice, size, usageFlags, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingMemory);
+        void transfer(VkDeviceSize size, const void* src, VkBuffer* dst, const VkCommandPool* commandPool) {
+            createBuffer(device, physicalDevice, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingMemory);
 
             void* stage;
             vkMapMemory(device, stagingMemory, 0, size, 0, &stage);
