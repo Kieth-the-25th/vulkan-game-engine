@@ -4,15 +4,16 @@
 #include "render.h"
 #include "btBulletDynamicsCommon.h"
 #include "btBulletCollisionCommon.h"
+#include "bulletCustom.h"
 
 /* renderer component */
 
 struct Renderer {
-	uint32_t objectIndex;
+	btCustomMotionState* motionState;
 	render::Mesh* mesh;
-	render::Material* material;
+	uint8_t count;
 
-	Renderer(render::Material* material, render::Mesh* mesh, uint32_t object);
+	Renderer(render::Mesh* mesh, uint8_t count, btCustomMotionState* motionState);
 };
 
 class Scene {
@@ -42,5 +43,7 @@ public:
 	void step();
 	void addRigidBody(btRigidBody::btRigidBodyConstructionInfo info);
 	void attachRenderer(Renderer component);
-	void drawObjects();
+	void drawObjects(glm::vec3 cameraPos);
+
+	~Scene();
 };

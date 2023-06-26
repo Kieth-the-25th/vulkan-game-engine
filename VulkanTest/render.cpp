@@ -21,10 +21,13 @@
 #include <array>
 #include <set>
 #include <iostream>
+#include <fstream>
 
 #include "vkheaderutil.h"
 
 #include "stb_image.h"
+#define TINYOBJLOADER_IMPLEMENTATION
+#include "tiny_obj_loader.h"
 
 using namespace render;
 
@@ -55,6 +58,41 @@ inline void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT&
     createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
     createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
     createInfo.pfnUserCallback = debugCallback;
+}
+
+inline void loadModel(const char* dir, Drawer* d, Mesh* mesh, uint16_t material) {
+    tinyobj::attrib_t attributes;
+    std::vector<tinyobj::shape_t> shapes;
+    std::vector<tinyobj::material_t> materials;
+    std::string errorMsg;
+    tinyobj::LoadObj(&attributes, &shapes, &materials, &errorMsg, dir);
+    std::vector<render::Vertex> vertices;
+    std::vector<uint32_t> indices;
+    std::vector<Submesh::SubmeshCreateInfo> submeshes;
+
+    for (size_t i = 0; i < attributes.vertices.size() / 3; i++)
+    {
+        size_t I = i * 3;
+        size_t J = i * 2;
+        vertices.push_back({ 
+            {attributes.vertices[I], attributes.vertices[I + 1], attributes.vertices[I + 2]},
+            {attributes.normals[I], attributes.normals[I + 1], attributes.normals[I + 2]},
+            {attributes.texcoords[J], attributes.texcoords[J + 1]} });
+    }
+
+    //TODO: better iterator?
+    std::vector<uint16_t> submeshIndices;
+    for (size_t i = 0; i < shapes.size(); i++)
+    {
+        for (size_t j = 0; j < shapes[i].mesh.indices.size(); j++)
+        {
+            submeshIndices.push_back(shapes[i].mesh.indices[j].vertex_index);
+        }
+    }
+
+    submeshes.push_back(Submesh::SubmeshCreateInfo(submeshIndices.data(), submeshIndices.size(), material));
+
+    *mesh = Mesh(d, vertices.data(), vertices.size(), submeshes);
 }
 
 inline void createInstance(Drawer* d) {
@@ -269,7 +307,7 @@ inline void createSwapchain(Drawer* d) {
 inline void createImageViews(Drawer* d) {
     for (size_t i = 0; i < d->frames.size(); i++)
     {
-        d->frames[i].swapchainImageView = createImageView(d->device, d->frames[i].swapchainImage, d->format, VK_IMAGE_ASPECT_COLOR_BIT);
+        d->frames[i].swapchainImageView = createImageView(d->device, d->frames[i].swapchainImage, VK_IMAGE_VIEW_TYPE_2D, d->format, VK_IMAGE_ASPECT_COLOR_BIT);
     }
 }
 
@@ -351,6 +389,50 @@ inline void createRenderPass(Drawer* d) {
     renderPassInfo.pDependencies = &dependency;
 
     if (vkCreateRenderPass(d->device, &renderPassInfo, nullptr, &(d->renderPass)) != VK_SUCCESS) {
+        throw std::runtime_error("Error creating render pass");
+    }
+}
+
+inline void createShadowPass(Drawer* d) {
+
+    VkAttachmentReference depthAttachmentRef{};
+    depthAttachmentRef.attachment = 1;
+    depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+    VkAttachmentDescription depthAttachment{};
+    depthAttachment.format = findDepthFormat(d->physicalDevice);
+    depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+    VkSubpassDescription subpass{};
+    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass.colorAttachmentCount = 1;
+    subpass.pDepthStencilAttachment = &depthAttachmentRef;
+
+    VkSubpassDependency dependency{};
+    dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+    dependency.dstSubpass = 0;
+    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    dependency.srcAccessMask = 0;
+    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+
+    VkAttachmentDescription attachments[1] = { depthAttachment };
+    VkRenderPassCreateInfo renderPassInfo{};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    renderPassInfo.attachmentCount = 2;
+    renderPassInfo.pAttachments = attachments;
+    renderPassInfo.subpassCount = 1;
+    renderPassInfo.pSubpasses = &subpass;
+    renderPassInfo.dependencyCount = 1;
+    renderPassInfo.pDependencies = &dependency;
+
+    if (vkCreateRenderPass(d->device, &renderPassInfo, nullptr, &(d->shadowPass)) != VK_SUCCESS) {
         throw std::runtime_error("Error creating render pass");
     }
 }
@@ -615,7 +697,7 @@ inline void createDefaultDescriptorSet(Drawer* d, Material* mat, const render::T
 
     VkDescriptorImageInfo imgInfo{};
     imgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    imgInfo.imageView = tex.imgView;
+    imgInfo.imageView = tex.textureView;
     imgInfo.sampler = tex.sampler;
 
     std::vector<VkWriteDescriptorSet> descriptorWrites{};
@@ -635,7 +717,7 @@ inline void createDefaultDescriptorSet(Drawer* d, Material* mat, const render::T
 
 inline void createDefaultMaterial(Drawer* d) {
     Material material{};
-    render::Texture texture(d, "textures/texture.bmp");
+    render::Texture texture(d, "textures/oad.ktx2", VK_IMAGE_VIEW_TYPE_2D);
 
     createDefaultDescSetLayout(d);
     material.descriptorLayout = d->defaultMaterialLayout;
@@ -648,11 +730,30 @@ inline void createDefaultMaterial(Drawer* d) {
 }
 
 inline void createDefaultMesh(Drawer* d) {
-    Mesh mesh;
-    mesh.copyToDeviceLocal(d, d->defaultBox.data(), d->defaultIndices.data(), d->defaultBox.size(), d->defaultIndices.size());
+    std::vector<Submesh::SubmeshCreateInfo> sub;
+    sub.push_back(Submesh::SubmeshCreateInfo(d->defaultIndices.data(), d->defaultIndices.size(), 0));
+    Mesh mesh(
+        d,
+        d->defaultBox.data(),
+        d->defaultBox.size(),
+        sub);
     d->registeredMeshes.push_back(mesh);
+    std::cout << "test:" << d->registeredMeshes[0].submeshes[0].iBufferSize << "\n";
+    std::cout << "test:" << d->registeredMeshes[0].submeshes[0].materialIndex << "\n";
 }
 
+inline void createSkybox(Drawer* d) {
+    Material material{};
+    render::Texture texture(d, "textures/oadskybox.ktx2", VK_IMAGE_VIEW_TYPE_CUBE);
+
+    material.descriptorLayout = d->defaultMaterialLayout;
+    createDefaultDescriptorSet(d, &material, texture);
+
+    std::vector<char> shaders[] = { getBytes("shaders/skyboxv.spv"), getBytes("shaders/skyboxf.spv") };
+    createGraphicsPipeline(d, shaders, &material);
+    d->registeredTextures.push_back(texture);
+    d->registeredMaterials.push_back(material);
+}
 
 
 inline void createCommandPool(Drawer* d) {
@@ -675,8 +776,31 @@ inline void createDepthStuff(Drawer* d) {
         { VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT },
         VK_IMAGE_TILING_OPTIMAL,
         VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
-    createImage(d->device, d->physicalDevice, d->extent.width, d->extent.height, depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, d->depthImage, d->depthMemory);
-    d->depthView = createImageView(d->device, d->depthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
+    createImage(d->device, d->physicalDevice, d->extent.width, d->extent.height, 1, depthFormat, VK_IMAGE_TILING_OPTIMAL, 0, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, d->depthImage, d->depthMemory);
+    d->depthView = createImageView(d->device, d->depthImage, VK_IMAGE_VIEW_TYPE_2D, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
+    VkSamplerCreateInfo depthSamplerCreateInfo{};
+    depthSamplerCreateInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    depthSamplerCreateInfo.magFilter = VK_FILTER_LINEAR;
+    depthSamplerCreateInfo.minFilter = VK_FILTER_LINEAR;
+    depthSamplerCreateInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    depthSamplerCreateInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    depthSamplerCreateInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    depthSamplerCreateInfo.anisotropyEnable = VK_TRUE;
+    depthSamplerCreateInfo.flags = 0;
+    VkPhysicalDeviceProperties properties{};
+    vkGetPhysicalDeviceProperties(d->physicalDevice, &properties);
+    depthSamplerCreateInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
+    depthSamplerCreateInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    depthSamplerCreateInfo.unnormalizedCoordinates = VK_FALSE;
+    depthSamplerCreateInfo.compareEnable = VK_FALSE;
+    depthSamplerCreateInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+    depthSamplerCreateInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    depthSamplerCreateInfo.mipLodBias = 0.0f;
+    depthSamplerCreateInfo.minLod = 0.0f;
+    depthSamplerCreateInfo.maxLod = 0.0f;
+    depthSamplerCreateInfo.anisotropyEnable = VK_TRUE;
+    depthSamplerCreateInfo.pNext = nullptr;
+    vkCreateSampler(d->device, &depthSamplerCreateInfo, nullptr, &(d->depthSampler));
 }
 
 
@@ -693,7 +817,6 @@ inline void createUniformBuffers(Drawer* d) {
         vkMapMemory(d->device, d->frameOrder[i].uniformBufferMemory, 0, size, 0, &(d->frameOrder[i].uniformMappedMemory));
     }
 }
-
 
 inline void createCommandBuffers(Drawer* d) {
     VkCommandBufferAllocateInfo allocInfo{};
@@ -739,6 +862,9 @@ inline void createSyncObjects(Drawer* d) {
     }
 }
 
+inline void createKTXstuff(Drawer* d) {
+    d->ktxVulkanInfo = ktxVulkanDeviceInfo_CreateEx(d->instance, d->physicalDevice, d->device, d->graphicsQueue, d->commandPool, nullptr, nullptr);
+}
 
 inline void test(Drawer* d) {
     VkBuffer b1;
@@ -765,6 +891,10 @@ inline void test(Drawer* d) {
     std::cout << number << "\n";
     std::cout << *(reinterpret_cast<uint64_t*>(map)) << "\n";
     std::cout << *(reinterpret_cast<uint64_t*>(map2)) << "\n";
+}
+
+Drawer::Drawer() {
+    this->init();
 }
 
 void Drawer::init() {
@@ -797,13 +927,54 @@ void Drawer::init() {
     createUniformBuffers(this);
     createCommandBuffers(this);
     createFrameDescriptorSets(this);
+    createKTXstuff(this);
     std::cout << "Creating debug objects...\n";
     createDefaultMaterial(this);
     createDefaultMesh(this);
+    //memory being overwritten?
+    std::cout << "test2:" << this->registeredMeshes[0].submeshes[0].iBufferSize << "\n";
+    createSkybox(this);
     std::cout << "Creating sync objects...\n";
     createSyncObjects(this);
 
-    test(this);
+    //test(this);
+}
+
+void Drawer::loadMesh(const char* dir, uint16_t* index, uint16_t materialIndex) {
+    tinyobj::attrib_t attributes;
+    std::vector<tinyobj::shape_t> shapes;
+    std::vector<tinyobj::material_t> materials;
+    std::string errorMsg;
+    tinyobj::LoadObj(&attributes, &shapes, &materials, &errorMsg, dir);
+    std::vector<render::Vertex> vertices;
+    std::vector<uint32_t> indices;
+    std::vector<Submesh::SubmeshCreateInfo> submeshes;
+
+    for (size_t i = 0; i < attributes.vertices.size() / 3; i++)
+    {
+        size_t I = i * 3;
+        size_t J = i * 2;
+        vertices.push_back({
+            {attributes.vertices[I], attributes.vertices[I + 1], attributes.vertices[I + 2]},
+            {attributes.normals[I], attributes.normals[I + 1], attributes.normals[I + 2]},
+            {attributes.texcoords[J], attributes.texcoords[J + 1]} });
+    }
+
+    //TODO: better iterator?
+    std::vector<uint16_t> submeshIndices;
+    for (size_t i = 0; i < shapes.size(); i++)
+    {
+        for (size_t j = 0; j < shapes[i].mesh.indices.size(); j++)
+        {
+            submeshIndices.push_back(shapes[i].mesh.indices[j].vertex_index);
+        }
+    }
+
+    submeshes.push_back(Submesh::SubmeshCreateInfo(submeshIndices.data(), submeshIndices.size(), materialIndex));
+
+    Mesh m(this, vertices.data(), vertices.size(), submeshes);
+    registeredMeshes.push_back(m);
+    *index = registeredMeshes.size() - 1;
 }
 
 void Drawer::beginFrame(glm::mat4 cameraView, double FOV) {
@@ -879,7 +1050,8 @@ void Drawer::draw() {
 void Drawer::draw(Sprite* s) {
 
 }
-void Drawer::draw(Mesh* m, Material* mat, glm::mat4 modelMatrix) {
+void Drawer::draw(Mesh* m, Submesh* s, Material* mat, glm::mat4 modelMatrix) {
+    std::cout << "count" << s->iBufferSize << "\n";
     if (frameOrder[currentFrame].boundMaterial == nullptr || mat != frameOrder[currentFrame].boundMaterial) {
         //Check not working
         std::cout << "Binding new material...\n";
@@ -901,9 +1073,9 @@ void Drawer::draw(Mesh* m, Material* mat, glm::mat4 modelMatrix) {
     //std::cout << modelMatrix[0][3] << " " << modelMatrix[1][3] << " " << modelMatrix[2][3] << " " << modelMatrix[3][3] << "\n";
 
     vkCmdBindVertexBuffers(frameOrder[currentFrame].frameCommandBuffer, 0, 1, vertBuffers, offsets);
-    vkCmdBindIndexBuffer(frameOrder[currentFrame].frameCommandBuffer, m->indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+    vkCmdBindIndexBuffer(frameOrder[currentFrame].frameCommandBuffer, s->indexBuffer, 0, VK_INDEX_TYPE_UINT16);
     vkCmdPushConstants(frameOrder[currentFrame].frameCommandBuffer, mat->layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstant), &push);
-    vkCmdDrawIndexed(frameOrder[currentFrame].frameCommandBuffer, static_cast<uint32_t>(m->iBufferSize), 1, 0, 0, 0);
+    vkCmdDrawIndexed(frameOrder[currentFrame].frameCommandBuffer, static_cast<uint32_t>(s->iBufferSize), 1, 0, 0, 0);
     //Pipeline not being bound?
 }
 /* Submit the recorded command buffer */
@@ -968,10 +1140,36 @@ void Drawer::endFrame() {
 }
 
 void Drawer::recreateSwapchain() {
-    std::cout << "bruh\n";
+    int w, h = 0;
+    glfwGetFramebufferSize(window, &w, &h);
+
+    while (w == 0 || h == 0) {
+        glfwGetFramebufferSize(window, &w, &h);
+        glfwWaitEvents();
+    }
+
+    vkDeviceWaitIdle(device);
+
+    cleanupSwapchain();
+
+    createSwapchain(this);
+    createImageViews(this);
+    createDepthStuff(this);
+    createFramebuffers(this);
 }
 
-render::Texture::Texture(Drawer* d, const char* dir) {
+void Drawer::cleanupSwapchain() {
+    std::cout << "Destroying framebuffers & image views...\n";
+    for (size_t i = 0; i < frames.size(); i++)
+    {
+        vkDestroyFramebuffer(device, frames[i].framebuffer, nullptr);
+        vkDestroyImageView(device, frames[i].swapchainImageView, nullptr);
+    }
+    std::cout << "Destroying swapchain...\n";
+    vkDestroySwapchainKHR(device, presentSwapchain, nullptr);
+}
+
+inline void stbTextureLoad(Drawer* d, const char* dir, VkImage imgBuffer, VkDeviceMemory imgMemory, VkImageView imgView, VkSampler sampler) {
     int width, height;
 
     int texChannels;
@@ -993,7 +1191,7 @@ render::Texture::Texture(Drawer* d, const char* dir) {
 
     stbi_image_free(pixels);
 
-    createImage(d->device, d->physicalDevice, width, height, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, imgBuffer, imgMemory);
+    createImage(d->device, d->physicalDevice, width, height, 1, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, 0, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, imgBuffer, imgMemory);
 
     transitionImageLayout(d->device, d->graphicsQueue, d->commandPool, imgBuffer, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
     VkCommandBuffer cmdBuffer = beginSimpleCommands(d->device, d->commandPool);
@@ -1017,7 +1215,7 @@ render::Texture::Texture(Drawer* d, const char* dir) {
     vkDestroyBuffer(d->device, staging, nullptr);
     vkFreeMemory(d->device, memory, nullptr);
 
-    imgView = createImageView(d->device, imgBuffer, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT);
+    imgView = createImageView(d->device, imgBuffer, VK_IMAGE_VIEW_TYPE_2D, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT);
 
     VkSamplerCreateInfo samplerInfo{};
     samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -1045,32 +1243,104 @@ render::Texture::Texture(Drawer* d, const char* dir) {
     }
 }
 
+inline void ktxTextureLoad(Drawer* d, const char* dir, ktxTexture2* texture, ktxVulkanTexture* dstTexture, VkImageUsageFlags usageFlags) {
+    /*std::ifstream file(dir, std::ios::in | std::ios::binary);
+    file.seekg(0, std::ios::end);
+    std::cout << file.tellg() << "\n";
+    std::vector<char> dataBytes(file.tellg());
+    file.seekg(0);
+    file.read(dataBytes.data(), dataBytes.size());
+    std::cout << ktxTexture_CreateFromMemory(reinterpret_cast<ktx_uint8_t*>(dataBytes.data()), dataBytes.size(), KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT, &texture) << "\n";*/
+    ktxTexture2_CreateFromNamedFile(dir, KTX_TEXTURE_CREATE_NO_FLAGS, &texture);
+    //std::cout << texture->numDimensions << "\n";
+    //VkFormatProperties properties;
+    //VkImageFormatProperties imgProperties;
+    //vkGetPhysicalDeviceFormatProperties(d->physicalDevice, (VkFormat)29, &properties);
+    //std::cout << texture->numDimensions << "\n";
+    //std::cout << vkGetPhysicalDeviceImageFormatProperties(d->physicalDevice, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TYPE_2D, VK_IMAGE_TILING_OPTIMAL, usageFlags, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, &imgProperties) << "\n";
+    //std::cout << !texture->pData << "\n";
+    //std::cout << properties.
+    //std::cout << ktxTexture_GetVkFormat(texture) << "\n";
+    //VK_FORMAT_R8G8B8A8_UNORM;
+    std::cout << "Texture VkFormat:" << ktxTexture2_GetVkFormat(texture) << "\n"; 
+    ktxTexture2_VkUploadEx(texture, d->ktxVulkanInfo, dstTexture, VK_IMAGE_TILING_OPTIMAL, usageFlags, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+    //std::cout << dstTexture->height << "\n";
+}
+
+render::Texture::Texture(Drawer* d, const char* dir, VkImageViewType imageType) {
+    ktxTexture2* texPtr = &texture;
+    ktxTextureLoad(d, dir, texPtr, &vkTexture, VK_IMAGE_USAGE_SAMPLED_BIT);
+    texture = *texPtr;
+    //std::cout << texture.baseHeight << "\n";
+
+    textureView = createImageView(d->device, vkTexture.image, imageType, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT);
+
+    VkSamplerCreateInfo samplerInfo{};
+    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    samplerInfo.magFilter = VK_FILTER_LINEAR;
+    samplerInfo.minFilter = VK_FILTER_LINEAR;
+    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.anisotropyEnable = VK_TRUE;
+    VkPhysicalDeviceProperties properties{};
+    vkGetPhysicalDeviceProperties(d->physicalDevice, &properties);
+    samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
+    samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    samplerInfo.unnormalizedCoordinates = VK_FALSE;
+    samplerInfo.compareEnable = VK_FALSE;
+    samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    samplerInfo.mipLodBias = 0.0f;
+    samplerInfo.minLod = 0.0f;
+    samplerInfo.maxLod = 0.0f;
+    samplerInfo.anisotropyEnable = VK_TRUE;
+
+    if (vkCreateSampler(d->device, &samplerInfo, nullptr, &sampler) != VK_SUCCESS) {
+        std::runtime_error("Failed to create image sampler");
+    }
+}
+
+render::TextureCube::TextureCube(Drawer* d, const char* dir) {
+}
+
 render::Material::Material() {
 
 }
 
-render::Mesh::Mesh() {
+render::Submesh::Submesh() {
 
 }
 
-void render::Mesh::copyToDeviceLocal(const Drawer* d, const Vertex* v, const uint16_t* i, uint32_t vcount, uint32_t icount) {
-    createBuffer(d->device, d->physicalDevice, vcount * sizeof(Vertex), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBuffer, vertexMemory);
-    createBuffer(d->device, d->physicalDevice, icount * sizeof(uint16_t), VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, indexBuffer, indexMemory);
-
-    vBufferSize = vcount;
-    iBufferSize = icount;
-
-    util::staging vstaging(d->device, d->physicalDevice, d->graphicsQueue);
-    vstaging.transfer(vcount * sizeof(Vertex), v, &(Mesh::vertexBuffer), &(d->commandPool));
-
+render::Submesh::Submesh(const Drawer* d, Submesh::SubmeshCreateInfo info) {
+    this->materialIndex = info.materialIndex;
+    createBuffer(d->device, d->physicalDevice, info.count * sizeof(uint16_t), VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, indexBuffer, indexMemory);
+    iBufferSize = info.count;
     util::staging istaging(d->device, d->physicalDevice, d->graphicsQueue);
-    istaging.transfer(icount * sizeof(uint16_t), i, &(Mesh::indexBuffer), &(d->commandPool));
+    istaging.transfer(info.count * sizeof(uint16_t), info.indices, &(indexBuffer), &(d->commandPool));
+}
 
-    void* map;
-    vkMapMemory(d->device, indexMemory, 0, icount * sizeof(uint16_t), 0, &map);
-    for (size_t i = 0; i < icount; i++)
+Submesh::SubmeshCreateInfo::SubmeshCreateInfo(const uint16_t* indices, uint32_t count, uint16_t materialIndex) {
+    this->indices = indices;
+    this->count = count;
+    this->materialIndex = materialIndex;
+}
+
+render::Mesh::Mesh(const Drawer* d, const Vertex* vertices, const uint32_t vcount, const std::vector<Submesh::SubmeshCreateInfo> createInfos) {
+    std::vector<Submesh> s;
+
+    for (size_t i = 0; i < createInfos.size(); i++)
     {
-        std::cout << reinterpret_cast<uint16_t*>(map)[i] << "\n";
+        s.push_back(Submesh(d, createInfos[i]));
     }
-    vkUnmapMemory(d->device, indexMemory);
+
+    std::cout << "test0:" << s[0].iBufferSize << "\n";
+
+    this->submeshes = s;
+
+    createBuffer(d->device, d->physicalDevice, vcount * sizeof(Vertex), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBuffer, vertexMemory);
+    vBufferSize = vcount;
+    util::staging vstaging(d->device, d->physicalDevice, d->graphicsQueue);
+    vstaging.transfer(vcount * sizeof(Vertex), vertices, &(Mesh::vertexBuffer), &(d->commandPool));
 }

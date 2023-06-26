@@ -194,13 +194,13 @@ inline bool hasStencilComponent(VkFormat format) {
     return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
 }
 
-inline VkImageView createImageView(VkDevice device, VkImage image, VkFormat imgFormat, VkImageAspectFlags aspectFlags) {
+inline VkImageView createImageView(VkDevice device, VkImage image, VkImageViewType type, VkFormat imgFormat, VkImageAspectFlags aspectFlags) {
     VkImageView r;
     VkImageViewCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     createInfo.image = image;
 
-    createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    createInfo.viewType = type;
     createInfo.format = imgFormat;
 
     createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;

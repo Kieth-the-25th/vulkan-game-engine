@@ -9,6 +9,9 @@
 #include <optional>
 #include <vector>
 
+#define KHRONOS_STATIC
+#include "ktxvulkan.h"
+
 namespace render
 {
     /* tutorial struct */
@@ -104,12 +107,38 @@ namespace render
 
     class Texture {
     public:
-        Texture(Drawer* d, const char* dir);
+        Texture(Drawer* d, const char* dir, VkImageViewType imageType);
 
-        VkImage imgBuffer;
-        VkDeviceMemory imgMemory;
-        VkImageView imgView;
+        ktxVulkanTexture vkTexture;
+        ktxTexture2 texture;
+        VkImageView textureView;
         VkSampler sampler;
+    };
+
+    class TextureCube {
+        TextureCube(Drawer* d, const char* dir);
+
+        ktxVulkanTexture vkTexture;
+        ktxTexture texture;
+    };
+
+    class Submesh {
+    public:
+        VkDeviceSize iBufferSize;
+        VkBuffer indexBuffer;
+        VkDeviceMemory indexMemory;
+        uint16_t materialIndex;
+
+        struct SubmeshCreateInfo {
+            const uint16_t* indices;
+            uint32_t count;
+            uint16_t materialIndex;
+
+            SubmeshCreateInfo(const uint16_t* indices, uint32_t count, uint16_t materialIndex);
+        };
+
+        Submesh();
+        Submesh(const Drawer* d, SubmeshCreateInfo info);
     };
 
     class Mesh {
@@ -118,13 +147,9 @@ namespace render
         VkBuffer vertexBuffer;
         VkDeviceMemory vertexMemory;
 
-        VkDeviceSize iBufferSize;
-        VkBuffer indexBuffer;
-        VkDeviceMemory indexMemory;
+        std::vector<Submesh> submeshes;
 
-        Mesh();
-
-        void copyToDeviceLocal(const Drawer* d, const Vertex* v, const uint16_t* i, uint32_t vcount, uint32_t icount);
+        Mesh(const Drawer* d, const Vertex* vertices, const uint32_t vcount, const std::vector<Submesh::SubmeshCreateInfo> createInfos);
     };
 
     class Sprite {
@@ -208,26 +233,29 @@ namespace render
 
         VkSwapchainKHR presentSwapchain;
         VkRenderPass renderPass;
+        VkRenderPass shadowPass;
         VkDescriptorSetLayout descSetLayout;
         VkCommandPool commandPool;
 
-        //Drawer();
+        Drawer();
         void init();
 
         /* Images */
 
         VkImage depthImage;
         VkImageView depthView;
+        VkSampler depthSampler;
 
         /* Buffers */
 
         /* Registers */
 
+        ktxVulkanDeviceInfo* ktxVulkanInfo;
         std::vector<Mesh> registeredMeshes;
         std::vector<render::Material> registeredMaterials;
         std::vector<render::Texture> registeredTextures;
 
-        void loadMesh();
+        void loadMesh(const char* dir, uint16_t* index, uint16_t materialIndex = 0);
         void loadMaterial();
 
         /* Memory */
@@ -266,7 +294,7 @@ namespace render
 
         void draw();
         void draw(Sprite* m);
-        void draw(Mesh* m, Material* mat, glm::mat4 modelMatrix);
+        void draw(Mesh* m, Submesh* s, Material* mat, glm::mat4 modelMatrix);
 
         void submitDraws();
 
@@ -274,6 +302,7 @@ namespace render
 
         /* Util Functions */
         void recreateSwapchain();
+        void cleanupSwapchain();
         void createBuffer(VkDeviceSize size, VkBufferUsageFlags flags, VkMemoryPropertyFlags memFlags, VkBuffer& buffer, VkDeviceMemory& memory);
         void createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
         uint32_t findMemoryType(uint32_t filter, VkMemoryPropertyFlags flags);
