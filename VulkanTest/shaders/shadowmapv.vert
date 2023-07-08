@@ -7,6 +7,7 @@ layout(location = 2) in vec2 texCoord;
 layout(set = 0, binding = 0) uniform UniformBufferObject {
     mat4 view;
     mat4 proj;
+    vec4 color;
 } ubo;
 
 layout(push_constant) uniform constants {

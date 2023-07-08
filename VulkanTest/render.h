@@ -14,6 +14,13 @@
 
 namespace render
 {
+    class Drawer;
+
+    struct DeviceBuffer {
+        VkBuffer buffer;
+        VkDeviceMemory memory;
+    };
+
     /* tutorial struct */
     struct FrameObjects {
     public:
@@ -26,6 +33,12 @@ namespace render
     struct UniformBufferObject {
         glm::mat4 view;
         glm::mat4 proj;
+    };
+
+    struct LightBufferObject {
+        glm::mat4 view;
+        glm::mat4 proj;
+        glm::vec4 color;
     };
 
     struct PushConstant {
@@ -103,8 +116,6 @@ namespace render
         VkPipelineLayout layout;
     };
 
-    class Drawer;
-
     class Texture {
     public:
         Texture(Drawer* d, const char* dir, VkImageViewType imageType);
@@ -115,6 +126,7 @@ namespace render
         VkSampler sampler;
     };
 
+    /* unused */
     class TextureCube {
         TextureCube(Drawer* d, const char* dir);
 
@@ -156,6 +168,26 @@ namespace render
 
     };
 
+    class Light {
+    public:
+        glm::mat4 transform;
+        float FOV;
+        VkImage shMap;
+        VkImageView shMapView;
+        VkSampler shMapSampler;
+        VkDeviceMemory shMapMemory;
+
+        bool isDynamic;
+        std::vector<VkFramebuffer> frames;
+
+        std::vector<DeviceBuffer> framePositions;
+        std::vector<void*> mappedMemory;
+        std::vector<VkDescriptorSet> frameSets;
+
+        Light();
+        Light(Drawer* d, glm::mat4 origin, float FOV, bool isDynamic);
+    };
+
     /* A struct for each image of the swapchain. Images from the swapchain could be retrieved out of order. */
     struct Frame {
     public:
@@ -177,15 +209,18 @@ namespace render
 
         VkBuffer uniformBuffer;
         VkDeviceMemory uniformBufferMemory;
+        VkBuffer baseLightBuffer;
+        VkDeviceMemory baseLightBufferMemory;
         VkDescriptorSet frameDescSet;
         void* uniformMappedMemory;
+        void* lightMappedMemory;
     };
 
 
     class Drawer {
     public:
-        const uint32_t WIDTH = 1600;
-        const uint32_t HEIGHT = 1200;
+        const uint32_t WIDTH = 256;//1600;
+        const uint32_t HEIGHT = 256;//900;
         const uint32_t FRAMES_IN_FLIGHT = 2;
 
         //std::vector<VkImage> swapchainImages;
@@ -208,6 +243,7 @@ namespace render
 
         VkDescriptorSetLayout frameDependantLayout;
         VkDescriptorSetLayout defaultMaterialLayout;
+        VkDescriptorSetLayout shadowMappingLayout;
         VkDescriptorPool descPool;
 
         VkFormat format;
@@ -228,12 +264,19 @@ namespace render
         VkSurfaceKHR surface;
         VkQueue presentQueue;
 
+        VkImage testImage;
+        VkDeviceMemory testImageMemory;
 
         VkDebugUtilsMessengerEXT debugMessenger;
 
         VkSwapchainKHR presentSwapchain;
         VkRenderPass renderPass;
         VkRenderPass shadowPass;
+        VkPipeline shadowPipeline;
+        VkPipelineLayout shadowPipelineLayout;
+        Light* mainLight;
+
+        std::vector<VkRenderPass> passes;
         VkDescriptorSetLayout descSetLayout;
         VkCommandPool commandPool;
 
@@ -252,6 +295,7 @@ namespace render
 
         ktxVulkanDeviceInfo* ktxVulkanInfo;
         std::vector<Mesh> registeredMeshes;
+        std::vector<Light> registeredLights;
         std::vector<render::Material> registeredMaterials;
         std::vector<render::Texture> registeredTextures;
 
@@ -290,13 +334,20 @@ namespace render
             4, 5, 6, 6, 5, 7}
         };
 
-        void beginFrame(glm::mat4 cameraView, double FOV);
+        void beginFrame(glm::mat4 cameraView, double FOV, std::vector<glm::mat4> lightViews, std::vector<double> lightFOVs);
+        void beginPass();
+        void beginPass(VkFramebuffer frame, VkRenderPass pass, VkExtent2D ext);
+
+        void bindShadowPassPipeline();
 
         void draw();
         void draw(Sprite* m);
-        void draw(Mesh* m, Submesh* s, Material* mat, glm::mat4 modelMatrix);
+        void draw(Mesh* m, Submesh* s, Material* mat, glm::mat4 modelMatrix, bool bindMaterial);
 
+        void endPass();
         void submitDraws();
+
+        void imageBarrier();
 
         void endFrame();
 
@@ -304,7 +355,6 @@ namespace render
         void recreateSwapchain();
         void cleanupSwapchain();
         void createBuffer(VkDeviceSize size, VkBufferUsageFlags flags, VkMemoryPropertyFlags memFlags, VkBuffer& buffer, VkDeviceMemory& memory);
-        void createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
         uint32_t findMemoryType(uint32_t filter, VkMemoryPropertyFlags flags);
     };
 };

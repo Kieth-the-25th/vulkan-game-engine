@@ -43,6 +43,7 @@ public:
 	void step();
 	void addRigidBody(btRigidBody::btRigidBodyConstructionInfo info);
 	void attachRenderer(Renderer component);
+	void updateShadowMap(render::Light* l);
 	void drawObjects(glm::vec3 cameraPos);
 
 	~Scene();

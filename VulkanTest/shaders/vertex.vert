@@ -6,11 +6,20 @@ layout(location = 2) in vec2 texCoord;
 
 layout(location = 0) out vec3 fragColor;
 layout(location = 1) out vec2 fragTexCoord;
+layout(location = 2) out vec4 lightColor;
+layout(location = 3) out vec4 fragShadowCoord;
 
 layout(set = 0, binding = 0) uniform UniformBufferObject {
     mat4 view;
     mat4 proj;
+    vec4 lightColor;
 } ubo;
+
+layout(set = 0, binding = 1) uniform LightingBufferObject {
+    mat4 view;
+    mat4 proj;
+    vec4 lightColor;
+} lbo;
 
 layout(push_constant) uniform constants {
     mat4 model;
@@ -18,6 +27,8 @@ layout(push_constant) uniform constants {
 } pushConstants;
 
 void main() {
+    lightColor = lbo.lightColor;
+    fragShadowCoord = lbo.proj * lbo.view * pushConstants.model * vec4(position, 1.0);
     gl_Position = ubo.proj * ubo.view * pushConstants.model * vec4(position, 1.0);
     fragColor = color;
     fragTexCoord = texCoord;

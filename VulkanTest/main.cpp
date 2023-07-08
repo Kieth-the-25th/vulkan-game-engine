@@ -1696,6 +1696,20 @@ int main() {
     btBoxShape box2({ 1, 1, 1 });
 
     {
+        btTransform origin({ 0, 0, 0, 1 }, { 0, 0.5, 10 });
+        btScalar mass(1.f);
+        glm::mat4 scale(0.0);
+        scale[0][0] = 1;
+        scale[1][1] = 1;
+        scale[2][2] = 1;
+        scale[3][3] = 1;
+        //btDefaultMotionState* state = new btDefaultMotionState(origin);
+        btCustomMotionState* state = new btCustomMotionState{ origin, btTransform::getIdentity(), scale };
+        s->addRigidBody(btRigidBody::btRigidBodyConstructionInfo{ mass, state, &box2, {1, 1, 1} });
+        s->attachRenderer(Renderer(&(d->registeredMeshes[modelIndex]), 1, state));
+    }
+
+    {
         btTransform origin({ 0, 0, 0, 1 }, { 0, 0, 0 });
         btScalar mass(0.f);
         //btDefaultMotionState* state = new btDefaultMotionState(origin);
@@ -1704,15 +1718,29 @@ int main() {
         scale[1][1] = 5;
         scale[2][2] = 1;
         scale[3][3] = 1;
-        btCustomMotionState* state = new btCustomMotionState{ origin, btTransform::getIdentity(), scale};
+        btCustomMotionState* state = new btCustomMotionState{ origin, btTransform::getIdentity(), scale };
         s->addRigidBody(btRigidBody::btRigidBodyConstructionInfo{ mass, state, &box, {1, 1, 1} });
         std::cout << "bufer " << (d->registeredMeshes[0]).submeshes[0].iBufferSize << "\n";
         s->attachRenderer(Renderer(&(d->registeredMeshes[0]), 1, state));
     }
 
     {
-        btTransform origin({ 0, 0, 0, 1 }, { 0, 0.5, 10 });
-        btScalar mass(1.f);
+        btTransform origin({ 0, 0, 0, 1 }, { -5, 0, 0 });
+        btScalar mass(0.f);
+        glm::mat4 scale(0.0);
+        scale[0][0] = 1;
+        scale[1][1] = 1;
+        scale[2][2] = 1;
+        scale[3][3] = 1;
+        //btDefaultMotionState* state = new btDefaultMotionState(origin);
+        btCustomMotionState* state = new btCustomMotionState{ origin, btTransform::getIdentity(), scale };
+        s->addRigidBody(btRigidBody::btRigidBodyConstructionInfo{ mass, state, &box2, {1, 1, 1} });
+        s->attachRenderer(Renderer(&(d->registeredMeshes[modelIndex]), 1, state));
+    }
+
+    {
+        btTransform origin({ 0, 0, 0, 1 }, { 0, -5, 0 });
+        btScalar mass(0.f);
         glm::mat4 scale(0.0);
         scale[0][0] = 1;
         scale[1][1] = 1;
