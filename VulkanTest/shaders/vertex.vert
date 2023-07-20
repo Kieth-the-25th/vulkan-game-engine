@@ -12,7 +12,6 @@ layout(location = 3) out vec4 fragShadowCoord;
 layout(set = 0, binding = 0) uniform UniformBufferObject {
     mat4 view;
     mat4 proj;
-    vec4 lightColor;
 } ubo;
 
 layout(set = 0, binding = 1) uniform LightingBufferObject {
@@ -26,9 +25,14 @@ layout(push_constant) uniform constants {
     vec4 misc;
 } pushConstants;
 
+mat4 shadowCoordBias = mat4(0.5, 0.0, 0.0, 0.0,
+                            0.0, 0.5, 0.0, 0.0,
+                            0.0, 0.0, 1.0, 0.0,
+                            0.5, 0.5, 0.0, 1.0);
+
 void main() {
     lightColor = lbo.lightColor;
-    fragShadowCoord = lbo.proj * lbo.view * pushConstants.model * vec4(position, 1.0);
+    fragShadowCoord = shadowCoordBias * lbo.proj * lbo.view * pushConstants.model * vec4(position, 1.0);
     gl_Position = ubo.proj * ubo.view * pushConstants.model * vec4(position, 1.0);
     fragColor = color;
     fragTexCoord = texCoord;

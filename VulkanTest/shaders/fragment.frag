@@ -12,8 +12,10 @@ layout(location = 0) out vec4 outColor;
 
 void main() {
     vec4 lighting = vec4(0, 0, 0, 0);
-    if (texture(shadowDepthSampler, fragShadowCoord.xy).z + 0.05 > fragShadowCoord.z) {
-        lighting = lightColor * 1;
+    if (texture(shadowDepthSampler, fragShadowCoord.xy / fragShadowCoord.w).r < (fragShadowCoord.z / fragShadowCoord.w)) {
+        lighting = lightColor * 5 * (fragShadowCoord.z / fragShadowCoord.w);
+        //lighting = vec4(0, 0, fragShadowCoord.z * 30.0, 1);
     }
-    outColor = (vec4(texture(shadowDepthSampler, (fragTexCoord.xy)).xyz, 1.0) * 0.5) + (vec4(texture(texSampler, fragTexCoord.xy).xyz, 1.0) * 0.1);
+    //outColor = (vec4(texture(shadowDepthSampler, (fragShadowCoord.xy) / fragShadowCoord.w).r, 0.0, 0.0, 1.0) * 5.0) + (vec4(texture(texSampler, fragTexCoord.xy).xyz, 1.0) * 0.1);
+    outColor = (lighting) + (vec4(texture(texSampler, fragTexCoord.xy).xyz, 1.0) * 0.5);
 }

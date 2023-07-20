@@ -21,7 +21,6 @@
 #include <algorithm>
 #include <optional>
 
-#define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
 #include "render.h"
@@ -1714,8 +1713,8 @@ int main() {
         btScalar mass(0.f);
         //btDefaultMotionState* state = new btDefaultMotionState(origin);
         glm::mat4 scale(0.0);
-        scale[0][0] = 5;
-        scale[1][1] = 5;
+        scale[0][0] = 20;
+        scale[1][1] = 20;
         scale[2][2] = 1;
         scale[3][3] = 1;
         btCustomMotionState* state = new btCustomMotionState{ origin, btTransform::getIdentity(), scale };
@@ -1761,7 +1760,10 @@ int main() {
         s->drawObjects(glm::vec3(4, 4, 4));
     }
 
+    delete d;
     delete s;
+
+    //TODO: flush cout to log
 
     return EXIT_SUCCESS;
 }

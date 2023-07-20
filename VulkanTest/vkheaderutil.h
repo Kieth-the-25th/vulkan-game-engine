@@ -227,7 +227,7 @@ inline VkImageView createImageView(VkDevice device, VkImage image, VkImageViewTy
     return r;
 }
 
-inline void transitionImageLayout(VkDevice device, VkQueue queue, VkCommandPool cmdPool, VkImage img, VkFormat format, VkImageLayout layout, VkImageLayout newLayout) {
+inline void transitionImageLayout(VkDevice device, VkQueue queue, VkCommandPool cmdPool, VkImage img, VkFormat format, VkImageLayout layout, VkImageLayout newLayout, VkImageAspectFlagBits aspect) {
     VkCommandBuffer buffer = beginSimpleCommands(device, cmdPool);
 
     VkImageMemoryBarrier barrier{};
@@ -237,7 +237,7 @@ inline void transitionImageLayout(VkDevice device, VkQueue queue, VkCommandPool 
     barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     barrier.image = img;
-    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier.subresourceRange.aspectMask = aspect;
     barrier.subresourceRange.baseArrayLayer = 0;
     barrier.subresourceRange.baseMipLevel = 0;
     barrier.subresourceRange.layerCount = 1;
@@ -259,6 +259,13 @@ inline void transitionImageLayout(VkDevice device, VkQueue queue, VkCommandPool 
 
         sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
         destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    }
+    else if (layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout != 0) {
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+
+        sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        destinationStage = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
     }
     else {
         throw std::invalid_argument("unsupported layout transition!");

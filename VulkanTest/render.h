@@ -219,8 +219,8 @@ namespace render
 
     class Drawer {
     public:
-        const uint32_t WIDTH = 256;//1600;
-        const uint32_t HEIGHT = 256;//900;
+        const uint32_t WIDTH = 1600;
+        const uint32_t HEIGHT = 900;
         const uint32_t FRAMES_IN_FLIGHT = 2;
 
         //std::vector<VkImage> swapchainImages;
@@ -265,6 +265,7 @@ namespace render
         VkQueue presentQueue;
 
         VkImage testImage;
+        VkBuffer testBuffer;
         VkDeviceMemory testImageMemory;
 
         VkDebugUtilsMessengerEXT debugMessenger;
@@ -335,8 +336,8 @@ namespace render
         };
 
         void beginFrame(glm::mat4 cameraView, double FOV, std::vector<glm::mat4> lightViews, std::vector<double> lightFOVs);
-        void beginPass();
-        void beginPass(VkFramebuffer frame, VkRenderPass pass, VkExtent2D ext);
+        void beginPass(std::vector<VkClearValue> clearValues);
+        void beginPass(VkFramebuffer frame, VkRenderPass pass, std::vector<VkClearValue> clearValues, VkExtent2D ext);
 
         void bindShadowPassPipeline();
 
@@ -348,13 +349,14 @@ namespace render
         void submitDraws();
 
         void imageBarrier();
+        void imageBarrier2();
 
         void endFrame();
 
         /* Util Functions */
         void recreateSwapchain();
         void cleanupSwapchain();
-        void createBuffer(VkDeviceSize size, VkBufferUsageFlags flags, VkMemoryPropertyFlags memFlags, VkBuffer& buffer, VkDeviceMemory& memory);
+        //void createBuffer(VkDeviceSize size, VkBufferUsageFlags flags, VkMemoryPropertyFlags memFlags, VkBuffer& buffer, VkDeviceMemory& memory);
         uint32_t findMemoryType(uint32_t filter, VkMemoryPropertyFlags flags);
     };
 };
