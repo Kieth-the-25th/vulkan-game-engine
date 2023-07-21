@@ -377,12 +377,11 @@ inline void createRenderPass(Drawer* d) {
     dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
     dependencies[0].dstSubpass = 0;
     dependencies[0].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-    dependencies[0].dstStageMask = 0;
+    dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
     dependencies[0].srcAccessMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
     dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
     dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
 
-    std::cout << "normal render pass" << "\n";
     VkAttachmentDescription attachments[2] = { colorAttachment, depthAttachment };
     VkRenderPassCreateInfo renderPassInfo{};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -438,7 +437,6 @@ inline void createDepthOnlyPass(Drawer* d) {
     dependencies[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
     dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
 
-    std::cout << "depth pass" << "\n";
     VkAttachmentDescription attachments[] = { depthAttachment };
     VkRenderPassCreateInfo renderPassInfo{};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -771,7 +769,6 @@ inline void createDepthOnlyPipeline(Drawer* d) {
     pipelineInfo.subpass = 0;
     pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
 
-    //kPipeline shadowPipeline{};
     if (vkCreateGraphicsPipelines(d->device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &(d->shadowPipeline)) != VK_SUCCESS) {
         throw std::runtime_error("failed to create graphics pipeline!");
     }
@@ -968,8 +965,6 @@ inline void createDefaultMesh(Drawer* d) {
         d->defaultBox.size(),
         sub);
     d->registeredMeshes.push_back(mesh);
-    std::cout << "test:" << d->registeredMeshes[0].submeshes[0].iBufferSize << "\n";
-    std::cout << "test:" << d->registeredMeshes[0].submeshes[0].materialIndex << "\n";
 }
 
 inline void createSkybox(Drawer* d) {
@@ -1161,7 +1156,6 @@ void Drawer::init() {
     createCommandBuffers(this);
     createShadowDescSetLayout(this);
     mainLight = new Light(this, glm::mat4(10.0), 60, true);
-    std::cout << "aaaaaa" << "\n";
     createFrameDescriptorSets(this);
     createKTXstuff(this);
     std::cout << "Creating debug objects...\n";
@@ -1356,42 +1350,6 @@ void Drawer::bindShadowPassPipeline() {
     vkCmdBindDescriptorSets(frameOrder[currentFrame].frameCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shadowPipelineLayout, 0, 1, &(mainLight->frameSets[currentFrame]), 0, nullptr);
 }
 
-void Drawer::imageBarrier() {
-    VkImageMemoryBarrier barrier{};
-    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    barrier.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-    barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    VkImageSubresourceRange range;
-    range.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-    range.baseArrayLayer = 0;
-    range.baseMipLevel = 0;
-    range.layerCount = 1;
-    range.levelCount = 1;
-    barrier.subresourceRange = range;
-    barrier.image = mainLight->shMap;
-    vkCmdPipelineBarrier(frameOrder[currentFrame].frameCommandBuffer, VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_DEPENDENCY_BY_REGION_BIT, 0, nullptr, 0, nullptr, 1, &barrier);
-}
-
-void Drawer::imageBarrier2() {
-    VkImageMemoryBarrier barrier{};
-    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    barrier.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
-    barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
-    barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-    VkImageSubresourceRange range;
-    range.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-    range.baseArrayLayer = 0;
-    range.baseMipLevel = 0;
-    range.layerCount = 1;
-    range.levelCount = 1;
-    barrier.subresourceRange = range;
-    barrier.image = mainLight->shMap;
-    vkCmdPipelineBarrier(frameOrder[currentFrame].frameCommandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_DEPENDENCY_BY_REGION_BIT, 0, nullptr, 0, nullptr, 1, &barrier);
-}
-
 /* Record the command buffer with all the draw commands */
 void Drawer::draw() {
 
@@ -1524,6 +1482,86 @@ void Drawer::cleanupSwapchain() {
     vkDestroySwapchainKHR(device, presentSwapchain, nullptr);
 }
 
+Drawer::~Drawer() {
+    vkDeviceWaitIdle(device);
+    std::cout << "Cleaning up...\n";
+
+    std::cout << "Destroying desc pool & layouts...\n";
+    vkDestroyDescriptorPool(device, descPool, nullptr);
+    vkDestroyDescriptorSetLayout(device, descSetLayout, nullptr);
+    vkDestroyDescriptorSetLayout(device, frameDependantLayout, nullptr);
+    vkDestroyDescriptorSetLayout(device, defaultMaterialLayout, nullptr);
+    vkDestroyDescriptorSetLayout(device, shadowMappingLayout, nullptr);
+
+    std::cout << "Destroying uniform buffers & sync objects...\n";
+    for (size_t i = 0; i < frameOrder.size(); i++)
+    {
+        vkDestroyBuffer(device, frameOrder[i].uniformBuffer, nullptr);
+        vkFreeMemory(device, frameOrder[i].uniformBufferMemory, nullptr);
+
+        vkDestroyBuffer(device, frameOrder[i].baseLightBuffer, nullptr);
+        vkFreeMemory(device, frameOrder[i].baseLightBufferMemory, nullptr);
+
+        vkDestroySemaphore(device, frameOrder[i].imageAvailable, nullptr);
+        vkDestroySemaphore(device, frameOrder[i].imageFinished, nullptr);
+        vkDestroyFence(device, frameOrder[i].fence, nullptr);
+    }
+
+    std::cout << "Destroying command pool...\n";
+    vkDestroyCommandPool(device, commandPool, nullptr);
+
+    std::cout << "Destroying swapchain...\n";
+    cleanupSwapchain();
+
+    std::cout << "Freeing texture resources...\n";
+    for (size_t i = 0; i < registeredTextures.size(); i++)
+    {
+        registeredTextures[i].free(this);
+    }
+
+    std::cout << "Freeing model resources...\n";
+    for (size_t i = 0; i < registeredMeshes.size(); i++)
+    {
+        registeredMeshes[i].free(this);
+    }
+
+    std::cout << "Destroying materials...\n";
+    for (size_t i = 0; i < registeredMaterials.size(); i++)
+    {
+        vkDestroyPipeline(device, registeredMaterials[i].pipeline, nullptr);
+        vkDestroyPipelineLayout(device, registeredMaterials[i].layout, nullptr);
+    }
+
+    std::cout << "Destroying lights...\n";
+    mainLight->free(this);
+    for (size_t i = 0; i < registeredLights.size(); i++)
+    {
+        registeredLights[i].free(this);
+    }
+    vkDestroyPipeline(device, shadowPipeline, nullptr);
+    vkDestroyPipelineLayout(device, shadowPipelineLayout, nullptr);
+
+    std::cout << "Freeing depth & stencil resources...\n";
+    vkDestroyImage(device, depthImage, nullptr);
+    vkDestroyImageView(device, depthView, nullptr);
+    vkFreeMemory(device, depthMemory, nullptr);
+    vkDestroySampler(device, depthSampler, nullptr);
+
+    std::cout << "Destroying pipeline and render passes...\n";
+    vkDestroyRenderPass(device, renderPass, nullptr);
+    vkDestroyRenderPass(device, shadowPass, nullptr);
+
+    std::cout << "Destroying virtual device...\n";
+    vkDestroyDevice(device, nullptr);
+
+    std::cout << "Destroying KHR surface and instance...\n";
+    vkDestroySurfaceKHR(instance, surface, nullptr);
+    vkDestroyInstance(instance, nullptr);
+
+    std::cout << "Terminating GLFW...\n";
+    glfwTerminate();
+}
+
 inline void stbTextureLoad(Drawer* d, const char* dir, VkImage* imgBuffer, VkFormat format, int usage, VkImageAspectFlagBits aspect, VkImageLayout finalLayout, VkDeviceMemory* imgMemory, VkImageView* imgView, VkSamplerCreateInfo info, VkSampler* sampler) {
     int width, height;
 
@@ -1637,6 +1675,13 @@ render::Texture::Texture(Drawer* d, const char* dir, VkImageViewType imageType) 
     }
 }
 
+void Texture::free(Drawer* d) {
+    vkDestroySampler(d->device, sampler, nullptr);
+    vkDestroyImageView(d->device, textureView, nullptr);
+    vkDestroyImage(d->device, vkTexture.image, nullptr);
+    vkFreeMemory(d->device, vkTexture.deviceMemory, nullptr);
+}
+
 render::Light::Light(Drawer* d, glm::mat4 origin, float FOV, bool isDynamic) {
     transform = origin;
     this->FOV = FOV;
@@ -1731,6 +1776,24 @@ render::Light::Light(Drawer* d, glm::mat4 origin, float FOV, bool isDynamic) {
     }
 };
 
+void Light::free(Drawer* d) {
+    vkDestroyImage(d->device, shMap, nullptr);
+    vkDestroyImageView(d->device, shMapView, nullptr);
+    vkFreeMemory(d->device, shMapMemory, nullptr);
+    vkDestroySampler(d->device, shMapSampler, nullptr);
+
+    for (size_t i = 0; i < frames.size(); i++)
+    {
+        vkDestroyFramebuffer(d->device, frames[i], nullptr);
+    }
+
+    for (size_t i = 0; i < framePositions.size(); i++)
+    {
+        vkDestroyBuffer(d->device, framePositions[i].buffer, nullptr);
+        vkFreeMemory(d->device, framePositions[i].memory, nullptr);
+    }
+}
+
 render::Material::Material() {
 
 }
@@ -1743,7 +1806,7 @@ render::Submesh::Submesh(const Drawer* d, Submesh::SubmeshCreateInfo info) {
     this->materialIndex = info.materialIndex;
     createBuffer(d->device, d->physicalDevice, info.count * sizeof(uint16_t), VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, indexBuffer, indexMemory);
     iBufferSize = info.count;
-    util::staging istaging(d->device, d->physicalDevice, d->graphicsQueue);
+    vkUtil::staging istaging(d->device, d->physicalDevice, d->graphicsQueue);
     istaging.transfer(info.count * sizeof(uint16_t), info.indices, &(indexBuffer), &(d->commandPool));
 }
 
@@ -1761,12 +1824,21 @@ render::Mesh::Mesh(const Drawer* d, const Vertex* vertices, const uint32_t vcoun
         s.push_back(Submesh(d, createInfos[i]));
     }
 
-    std::cout << "test0:" << s[0].iBufferSize << "\n";
-
     this->submeshes = s;
 
     createBuffer(d->device, d->physicalDevice, vcount * sizeof(Vertex), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBuffer, vertexMemory);
     vBufferSize = vcount;
-    util::staging vstaging(d->device, d->physicalDevice, d->graphicsQueue);
+    vkUtil::staging vstaging(d->device, d->physicalDevice, d->graphicsQueue);
     vstaging.transfer(vcount * sizeof(Vertex), vertices, &(Mesh::vertexBuffer), &(d->commandPool));
+}
+
+void Mesh::free(Drawer* d) {
+    vkDestroyBuffer(d->device, vertexBuffer, nullptr);
+    vkFreeMemory(d->device, vertexMemory, nullptr);
+
+    for (size_t i = 0; i < submeshes.size(); i++)
+    {
+        vkDestroyBuffer(d->device, submeshes[i].indexBuffer, nullptr);
+        vkFreeMemory(d->device, submeshes[i].indexMemory, nullptr);
+    }
 }

@@ -120,6 +120,8 @@ namespace render
     public:
         Texture(Drawer* d, const char* dir, VkImageViewType imageType);
 
+        void free(Drawer* d);
+
         ktxVulkanTexture vkTexture;
         ktxTexture2 texture;
         VkImageView textureView;
@@ -162,6 +164,8 @@ namespace render
         std::vector<Submesh> submeshes;
 
         Mesh(const Drawer* d, const Vertex* vertices, const uint32_t vcount, const std::vector<Submesh::SubmeshCreateInfo> createInfos);
+
+        void free(Drawer* d);
     };
 
     class Sprite {
@@ -186,6 +190,8 @@ namespace render
 
         Light();
         Light(Drawer* d, glm::mat4 origin, float FOV, bool isDynamic);
+
+        void free(Drawer* d);
     };
 
     /* A struct for each image of the swapchain. Images from the swapchain could be retrieved out of order. */
@@ -264,9 +270,9 @@ namespace render
         VkSurfaceKHR surface;
         VkQueue presentQueue;
 
-        VkImage testImage;
-        VkBuffer testBuffer;
-        VkDeviceMemory testImageMemory;
+        //VkImage testImage;
+        //VkBuffer testBuffer;
+        //VkDeviceMemory testImageMemory;
 
         VkDebugUtilsMessengerEXT debugMessenger;
 
@@ -282,6 +288,7 @@ namespace render
         VkCommandPool commandPool;
 
         Drawer();
+        ~Drawer();
         void init();
 
         /* Images */
@@ -347,9 +354,6 @@ namespace render
 
         void endPass();
         void submitDraws();
-
-        void imageBarrier();
-        void imageBarrier2();
 
         void endFrame();
 

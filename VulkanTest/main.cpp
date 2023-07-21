@@ -1719,7 +1719,6 @@ int main() {
         scale[3][3] = 1;
         btCustomMotionState* state = new btCustomMotionState{ origin, btTransform::getIdentity(), scale };
         s->addRigidBody(btRigidBody::btRigidBodyConstructionInfo{ mass, state, &box, {1, 1, 1} });
-        std::cout << "bufer " << (d->registeredMeshes[0]).submeshes[0].iBufferSize << "\n";
         s->attachRenderer(Renderer(&(d->registeredMeshes[0]), 1, state));
     }
 
