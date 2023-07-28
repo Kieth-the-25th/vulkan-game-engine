@@ -46,10 +46,6 @@ namespace render
         glm::vec4 data;
     };
 
-    class Camera {
-        VkSwapchainKHR target;
-    };
-
     struct Vertex {
         glm::vec3 pos;
         glm::vec3 color;
@@ -194,6 +190,11 @@ namespace render
         void free(Drawer* d);
     };
 
+    struct VertexLight {
+        glm::vec4 pos;
+        glm::vec4 color;
+    };
+
     /* A struct for each image of the swapchain. Images from the swapchain could be retrieved out of order. */
     struct Frame {
     public:
@@ -215,6 +216,8 @@ namespace render
 
         VkBuffer uniformBuffer;
         VkDeviceMemory uniformBufferMemory;
+        VkBuffer vLightBuffer;
+        VkDeviceMemory vLightMemory;
         VkBuffer baseLightBuffer;
         VkDeviceMemory baseLightBufferMemory;
         VkDescriptorSet frameDescSet;
@@ -222,6 +225,31 @@ namespace render
         void* lightMappedMemory;
     };
 
+    struct CameraFrameOrdered {
+    public:
+        VkCommandBuffer frameCommandBuffer;
+        Material* boundMaterial;
+        VkSemaphore imageFinished;
+        VkSemaphore imageAvailable;
+        VkFence fence;
+    };
+
+    /*class Camera {
+    public:
+        glm::vec3 position;
+        glm::vec3 normal;
+        double FOV;
+
+        VkSwapchainKHR swapchain;
+        VkFormat swapchainFormat;
+        VkExtent2D swapchainExtent;
+        std::vector<Frame> frameObjects;
+        std::vector<CameraFrameOrdered> orderedFrameObjects;
+
+        Camera(glm::vec3 pos, glm::vec3 norm, double fov, );
+    private:
+        VkSwapchainKHR target;
+    };*/
 
     class Drawer {
     public:
@@ -241,11 +269,7 @@ namespace render
         bool framebufferResized;
 
         Material currentMaterial;
-
-        glm::vec3 cameraPos = glm::vec3(2.0, 2.0, 2.0);
-
         VkDeviceMemory depthMemory;
-        //VkSampler depthSampler;
 
         VkDescriptorSetLayout frameDependantLayout;
         VkDescriptorSetLayout defaultMaterialLayout;
@@ -304,6 +328,9 @@ namespace render
         ktxVulkanDeviceInfo* ktxVulkanInfo;
         std::vector<Mesh> registeredMeshes;
         std::vector<Light> registeredLights;
+        size_t maxVertLights = 40;
+        std::vector<VertexLight> vertexLights;
+        VkBuffer vertexLightStorageBuffer;
         std::vector<render::Material> registeredMaterials;
         std::vector<render::Texture> registeredTextures;
 

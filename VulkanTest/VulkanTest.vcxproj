@@ -149,6 +149,7 @@
   <ItemGroup>
     <ClCompile Include="bulletCustom.cpp" />
     <ClCompile Include="engine.cpp" />
+    <ClCompile Include="input.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="objects.cpp" />
     <ClCompile Include="render.cpp" />
@@ -158,6 +159,7 @@
   <ItemGroup>
     <ClInclude Include="bulletCustom.h" />
     <ClInclude Include="engine.h" />
+    <ClInclude Include="input.h" />
     <ClInclude Include="objects.h" />
     <ClInclude Include="render.h" />
     <ClInclude Include="scene.h" />

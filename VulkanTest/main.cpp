@@ -25,6 +25,7 @@
 
 #include "render.h"
 #include "scene.h"
+#include "input.h"
 #include "bulletCustom.h"
 
 
@@ -1681,9 +1682,55 @@ int tutorialmain() {
     return EXIT_SUCCESS;
 }
 
+float vertLook = 0;
+float horizLook = 0;
+glm::vec3 up = glm::vec3(0.0, 0.0, 1.0);
+glm::vec3 cameraPos = glm::vec3(4.0, 0.0, 1.0);
+glm::vec3 cameraNorm = glm::vec3(1.0, 0.0, 0.0);
+
+void noclipMovement(GLFWwindow* window) {
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
+        cameraPos = cameraPos + cameraNorm;
+    }
+    else if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
+        cameraPos = cameraPos - cameraNorm;
+    };
+
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
+        glm::vec3 add = glm::normalize(glm::cross(glm::vec3(0.0, 0.0, 1.0), cameraNorm));
+        cameraPos = cameraPos + add;
+    }
+    else if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
+        glm::vec3 add = glm::normalize(glm::cross(glm::vec3(0.0, 0.0, 1.0), cameraNorm));
+        cameraPos = cameraPos - add;
+    };
+
+    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) {
+        glm::vec3 add(0.0, 0.0, 1.0);
+        cameraPos = cameraPos + add;
+    }
+    else if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) {
+        glm::vec3 add(0.0, 0.0, 1.0);
+        cameraPos = cameraPos - add;
+    };
+}
+
+void mouseLook(GLFWwindow* window, double xpos, double ypos) {
+    vertLook = ypos * 0.001;
+    horizLook = xpos * 0.001;
+
+    glm::vec4 fwd(1.0, 0.0, 0.0, 0.0);
+    glm::mat4 mat = glm::rotate(glm::mat4(1.0), horizLook, up);
+    glm::vec3 fwd2 = fwd * mat;
+    glm::mat4 mat2 = glm::rotate(glm::mat4(1.0), vertLook, glm::cross(fwd2, up));
+    fwd = fwd * mat * mat2;
+    cameraNorm = glm::normalize(glm::vec3(fwd.x, fwd.y, fwd.z));
+}
+
 int main() {
     render::Drawer* d = new render::Drawer();
     Scene* s = new Scene{d};
+    Input* i = new Input(d->window);
 
     std::cout << "Finished initialization\n";
 
@@ -1750,13 +1797,19 @@ int main() {
         s->attachRenderer(Renderer(&(d->registeredMeshes[modelIndex]), 1, state));
     }
 
+    Input::ControlMode c(nullptr, mouseLook, GLFW_RAW_MOUSE_MOTION);
+    i->addControlMode(c);
+    i->setControlMode(0);
+
     //std::cout << d.registeredMeshes[0].vBufferSize << "\n";
     //std::cout << d.registeredMeshes[0].iBufferSize << "\n";
 
     while (!glfwWindowShouldClose(d->window)) {
         glfwPollEvents();
+        noclipMovement(d->window);
+        //std::cout << cameraNorm.x << " " << cameraNorm.y << " " << cameraNorm.z << "\n";
         s->step();
-        s->drawObjects(glm::vec3(4, 4, 4));
+        s->drawObjects(glm::lookAt(cameraPos, cameraPos + cameraNorm, glm::vec3(0.0, 0.0, 1.0)));
     }
 
     delete d;

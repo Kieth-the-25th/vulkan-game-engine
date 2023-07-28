@@ -17,10 +17,23 @@ struct Renderer {
 };
 
 class Scene {
+public:
+	Scene(render::Drawer* drawer);
+
+	void step();
+	void addRigidBody(btRigidBody::btRigidBodyConstructionInfo info);
+	void attachRenderer(Renderer component);
+	void updateShadowMap(render::Light* l);
+	void drawObjects(glm::mat4 cameraView);
+
+	~Scene();
+
 private:
 	float timestep;
 
-	render::Camera mainCamera;
+	glm::vec3 up;
+
+	//render::Camera mainCamera;
 
 	render::Drawer* drawer;
 
@@ -36,15 +49,4 @@ private:
 	
 	btAlignedObjectArray<btCollisionShape*> collisionShapes;
 	std::vector<Renderer> renderedScene;
-
-public:
-	Scene(render::Drawer* drawer);
-
-	void step();
-	void addRigidBody(btRigidBody::btRigidBodyConstructionInfo info);
-	void attachRenderer(Renderer component);
-	void updateShadowMap(render::Light* l);
-	void drawObjects(glm::vec3 cameraPos);
-
-	~Scene();
 };

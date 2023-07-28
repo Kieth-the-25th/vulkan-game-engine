@@ -454,15 +454,17 @@ inline void createDepthOnlyPass(Drawer* d) {
 
 inline void createDescriptorPool(Drawer* d) {
     std::vector<VkDescriptorPoolSize> poolSizes{};
-    poolSizes.resize(2);
+    poolSizes.resize(3);
     poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     poolSizes[0].descriptorCount = static_cast<uint32_t>(10);
     poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     poolSizes[1].descriptorCount = static_cast<uint32_t>(10);
+    poolSizes[2].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    poolSizes[2].descriptorCount = static_cast<uint32_t>(10);
 
     VkDescriptorPoolCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    info.maxSets = 20;
+    info.maxSets = 30;
     info.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
     info.pPoolSizes = poolSizes.data();
 
@@ -820,28 +822,30 @@ inline void createShadowDescSetLayout(Drawer* d) {
 }
 
 inline void createFrameDescriptorSets(Drawer* d) {
-    VkDescriptorSetLayoutBinding binding{};
-    binding.binding = 0;
-    binding.descriptorCount = 1;
-    binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    std::vector<VkDescriptorSetLayoutBinding> bindings;
+    bindings.resize(4);
+    bindings[0].binding = 0;
+    bindings[0].descriptorCount = 1;
+    bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    bindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
-    VkDescriptorSetLayoutBinding binding2{};
-    binding2.binding = 1;
-    binding2.descriptorCount = 1;
-    binding2.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    binding2.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    bindings[1].binding = 1;
+    bindings[1].descriptorCount = 1;
+    bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    bindings[1].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 
-    VkDescriptorSetLayoutBinding binding3{};
-    binding3.binding = 2;
-    binding3.descriptorCount = 1;
-    binding3.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    binding3.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    bindings[2].binding = 2;
+    bindings[2].descriptorCount = 1;
+    bindings[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    bindings[2].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-    std::vector<VkDescriptorSetLayoutBinding> bindings = { binding, binding2, binding3 };
+    bindings[3].binding = 3;
+    bindings[3].descriptorCount = 1;
+    bindings[3].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    bindings[3].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
     VkDescriptorSetLayoutCreateInfo createInfo{};
-    createInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+    createInfo.bindingCount = bindings.size();
     createInfo.pBindings = bindings.data();
     createInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 
@@ -877,8 +881,13 @@ inline void createFrameDescriptorSets(Drawer* d) {
         iInfo.imageView = d->mainLight->shMapView;
         iInfo.sampler = d->mainLight->shMapSampler;
 
+        VkDescriptorBufferInfo b3Info{};
+        b3Info.buffer = d->frameOrder[i].vLightBuffer;
+        b3Info.offset = 0;
+        b3Info.range = d->maxVertLights * sizeof(VertexLight);
+
         std::vector<VkWriteDescriptorSet> descriptorWrites{};
-        descriptorWrites.resize(3);
+        descriptorWrites.resize(4);
 
         descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptorWrites[0].dstSet = descriptors[i];
@@ -903,6 +912,14 @@ inline void createFrameDescriptorSets(Drawer* d) {
         descriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         descriptorWrites[2].descriptorCount = 1;
         descriptorWrites[2].pImageInfo = &iInfo;
+
+        descriptorWrites[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrites[3].dstSet = descriptors[i];
+        descriptorWrites[3].dstBinding = 3;
+        descriptorWrites[3].dstArrayElement = 0;
+        descriptorWrites[3].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        descriptorWrites[3].descriptorCount = 1;
+        descriptorWrites[3].pBufferInfo = &b3Info;
 
 
         vkUpdateDescriptorSets(d->device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
@@ -1032,10 +1049,7 @@ inline void createDepthStuff(Drawer* d) {
 inline void createUniformBuffers(Drawer* d) {
     VkDeviceSize size = sizeof(UniformBufferObject);
     VkDeviceSize size2 = sizeof(LightBufferObject);
-
-    //d->uniformBuffers.resize(d->FRAMES_IN_FLIGHT);
-    //d->uniformMemory.resize(d->FRAMES_IN_FLIGHT);
-    //d->mappedMemory.resize(d->FRAMES_IN_FLIGHT);
+    VkDeviceSize size3 = sizeof(VertexLight) * d->maxVertLights;
 
     for (size_t i = 0; i < d->FRAMES_IN_FLIGHT; i++)
     {
@@ -1044,6 +1058,8 @@ inline void createUniformBuffers(Drawer* d) {
 
         createBuffer(d->device, d->physicalDevice, size2, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, d->frameOrder[i].baseLightBuffer, d->frameOrder[i].baseLightBufferMemory);
         vkMapMemory(d->device, d->frameOrder[i].baseLightBufferMemory, 0, size2, 0, &(d->frameOrder[i].lightMappedMemory));
+
+        createBuffer(d->device, d->physicalDevice, size3, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, d->frameOrder[i].vLightBuffer, d->frameOrder[i].vLightMemory);
     }
 }
 
@@ -1166,34 +1182,11 @@ void Drawer::init() {
     std::cout << "Creating sync objects...\n";
     createSyncObjects(this);
 
-    /*long number = 256 * 256 * 4;
-    VkDeviceSize size = number;
-    std::vector<char> chars(255, number);
+    vkUtil::init(device, physicalDevice, graphicsQueue);
 
-    createBuffer(this->device, this->physicalDevice, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, this->testBuffer, this->testImageMemory);
+    vertexLights.push_back({{10, 10, 1, 0}, {1, 0, 1, 0}});
 
-    void* imgMem;
-    vkMapMemory(this->device, this->testImageMemory, 0, size, 0, &imgMem);
-    memcpy(imgMem, chars.data(), size);
-    vkUnmapMemory(this->device, this->testImageMemory);
-
-    VkBufferImageCopy region{};
-    region.bufferRowLength = 0;
-    region.bufferImageHeight = 0;
-    region.bufferOffset = 0;
-    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-    region.imageSubresource.mipLevel = 0;
-    region.imageSubresource.baseArrayLayer = 0;
-    region.imageSubresource.layerCount = 1;
-    region.imageExtent = { static_cast<uint32_t>(64), static_cast<uint32_t>(64), 1 };
-    region.imageOffset = { 0, 0, 0 };
-
-    VkCommandBuffer buffer = beginSimpleCommands(this->device, this->commandPool);
-    transitionImageLayout(this->device, this->graphicsQueue, this->commandPool, this->mainLight->shMap, findDepthSamplerFormat(this->physicalDevice), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
-    vkCmdCopyBufferToImage(buffer, this->testBuffer, this->mainLight->shMap, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-    endSimpleCommands(buffer, this->graphicsQueue);*/
-
-    //test(this);
+    //glfw
 }
 
 void Drawer::loadMesh(const char* dir, uint16_t* index, uint16_t materialIndex) {
@@ -1272,7 +1265,7 @@ void Drawer::beginPass(VkFramebuffer frame, VkRenderPass pass, std::vector<VkCle
 inline void updateUBOs(Drawer* d, int frame, glm::mat4 cameraView, double FOV, std::vector<glm::mat4> lightViews, std::vector<double> lightFOVs) {
     UniformBufferObject ubo{};
     ubo.view = cameraView;
-    ubo.proj = glm::perspective(glm::radians(FOV), d->extent.width / (double)d->extent.height, 0.1, 100.0);
+    ubo.proj = glm::perspective(glm::radians(FOV), d->extent.width / (double)d->extent.height, 0.1, 10000.0);
     ubo.proj[1][1] *= -1;
     memcpy(d->frameOrder[frame].uniformMappedMemory, &ubo, sizeof(ubo));
 
@@ -1282,6 +1275,23 @@ inline void updateUBOs(Drawer* d, int frame, glm::mat4 cameraView, double FOV, s
     lbo.color = { 1, 1, 1, 1 };
     memcpy(d->mainLight->mappedMemory[frame], &lbo, sizeof(lbo));
     memcpy(d->frameOrder[frame].lightMappedMemory, &lbo, sizeof(lbo));
+
+    vkUtil::begincpy(d->device, d->commandPool);
+    VkBufferCopy cpy1{};
+    cpy1.dstOffset = 0;
+    cpy1.srcOffset = 0;
+    cpy1.size = sizeof(glm::vec4);
+    glm::vec4 data;
+    data.x = static_cast<float>(d->vertexLights.size());
+    std::cout << cpy1.size << "\n";
+    vkUtil::gpumemcpy(d->device, d->physicalDevice, d->graphicsQueue, d->commandPool, d->frameOrder[frame].vLightBuffer, &data, cpy1);
+    VkBufferCopy cpy2{};
+    cpy2.dstOffset = sizeof(glm::vec4);
+    cpy2.srcOffset = 0;
+    cpy2.size = sizeof(VertexLight) * d->vertexLights.size();
+    std::cout << cpy2.size << "\n";
+    vkUtil::gpumemcpy(d->device, d->physicalDevice, d->graphicsQueue, d->commandPool, d->frameOrder[frame].vLightBuffer, d->vertexLights.data(), cpy2);
+    vkUtil::endcpy(d->graphicsQueue);
 
 #ifdef DEBUG_GRAPHICS
     std::cout << lbo.proj[0][0] << " " << lbo.proj[0][1] << " " << lbo.proj[0][2] << " " << lbo.proj[0][3] << "\n";
@@ -1502,10 +1512,14 @@ Drawer::~Drawer() {
         vkDestroyBuffer(device, frameOrder[i].baseLightBuffer, nullptr);
         vkFreeMemory(device, frameOrder[i].baseLightBufferMemory, nullptr);
 
+        vkDestroyBuffer(device, frameOrder[i].vLightBuffer, nullptr);
+        vkFreeMemory(device, frameOrder[i].vLightMemory, nullptr);
+
         vkDestroySemaphore(device, frameOrder[i].imageAvailable, nullptr);
         vkDestroySemaphore(device, frameOrder[i].imageFinished, nullptr);
         vkDestroyFence(device, frameOrder[i].fence, nullptr);
     }
+    vkUtil::free(device);
 
     std::cout << "Destroying command pool...\n";
     vkDestroyCommandPool(device, commandPool, nullptr);

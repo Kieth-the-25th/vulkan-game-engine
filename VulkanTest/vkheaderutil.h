@@ -309,16 +309,21 @@ inline void endSimpleCommands(VkCommandBuffer buffer, VkQueue queue) {
     vkQueueWaitIdle(queue);
 }
 
-inline void copyBuffer(VkDevice device, VkQueue queue, VkCommandPool pool, VkBuffer src, VkBuffer dst, VkDeviceSize size) {
+inline void copyBuffer(VkDevice device, VkQueue queue, VkCommandPool pool, VkBuffer src, VkBuffer dst, VkBufferCopy copy) {
     VkCommandBuffer buffer = beginSimpleCommands(device, pool);
 
+    vkCmdCopyBuffer(buffer, src, dst, 1, &copy);
+
+    endSimpleCommands(buffer, queue);
+}
+
+inline void copyBuffer(VkDevice device, VkQueue queue, VkCommandPool pool, VkBuffer src, VkBuffer dst, VkDeviceSize size) {
     VkBufferCopy copyRegion{};
     copyRegion.srcOffset = 0; // Optional
     copyRegion.dstOffset = 0; // Optional
     copyRegion.size = size;
-    vkCmdCopyBuffer(buffer, src, dst, 1, &copyRegion);
 
-    endSimpleCommands(buffer, queue);
+    copyBuffer(device, queue, pool, src, dst, copyRegion);
 }
 
 inline void createBuffer(VkDevice device, VkPhysicalDevice physicalDevice, VkDeviceSize size, VkBufferUsageFlags flags, VkMemoryPropertyFlags memFlags, VkBuffer& buffer, VkDeviceMemory& memory) {
@@ -444,4 +449,34 @@ namespace vkUtil {
             destroyBuffer(device, stagingBuffer, stagingMemory);
         }
     };
+
+    VkBuffer stagingBuffer;
+    VkDeviceMemory stagingBufferMem;
+    void* stagingBufferMappedMem;
+    VkCommandBuffer currentCmdBuffer;
+
+    void init(VkDevice device, VkPhysicalDevice physicalDevice, VkQueue transferQueue) {
+        VkPhysicalDeviceProperties props{};
+        vkGetPhysicalDeviceProperties(physicalDevice, &props);
+        std::cout << "Max buffer memory: " << props.limits.maxStorageBufferRange << "\n";
+        createBuffer(device, physicalDevice, props.limits.maxStorageBufferRange / 2, VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMem);
+        vkMapMemory(device, stagingBufferMem, 0, VK_WHOLE_SIZE, 0, &stagingBufferMappedMem);
+    }
+
+    void begincpy(VkDevice device, VkCommandPool pool) {
+        currentCmdBuffer = beginSimpleCommands(device, pool);
+    }
+
+    void gpumemcpy(VkDevice device, VkPhysicalDevice physicalDevice, VkQueue queue, VkCommandPool commandPool, VkBuffer dst, const void* src, VkBufferCopy size) {
+        memcpy(stagingBufferMappedMem, src, static_cast<size_t>(size.size));
+        copyBuffer(device, queue, commandPool, stagingBuffer, dst, size);
+    }
+    
+    void endcpy(VkQueue queue) {
+        endSimpleCommands(currentCmdBuffer, queue);
+    }
+
+    void free(VkDevice device) {
+        destroyBuffer(device, stagingBuffer, stagingBufferMem);
+    }
 };

@@ -29,7 +29,7 @@ Renderer::Renderer(render::Mesh* mesh, uint8_t count, btCustomMotionState* motio
 Scene::Scene(render::Drawer* drawer) {
 	Scene::timestep = static_cast<float>(1) / 60;
 
-	Scene::mainCamera = render::Camera();
+	//Scene::mainCamera = render::Camera();
 
 	Scene::defaultConfig = new btDefaultCollisionConfiguration();
 
@@ -92,7 +92,7 @@ void Scene::updateShadowMap(render::Light* l) {
 };
 
 
-void Scene::drawObjects(glm::vec3 cameraPos) {
+void Scene::drawObjects(glm::mat4 cameraView) {
 	std::vector<glm::mat4> lightViews;
 	std::vector<double> fovs;
 	glm::mat4 testView = glm::lookAt(glm::vec3(4.0, 0, 10.0), glm::vec3(0, 0, 0), glm::vec3(1, 0, 0));
@@ -100,7 +100,7 @@ void Scene::drawObjects(glm::vec3 cameraPos) {
 	lightViews.push_back(testView);
 	fovs.push_back(90);
 
-	drawer->beginFrame(lookAt(glm::vec3(6.0, 6.0, 10.0), glm::vec3(0, 0, 0), glm::vec3(0, 0, 1)), 90, lightViews, fovs);
+	drawer->beginFrame(cameraView, 90, lightViews, fovs);
 	/*for (size_t i = 0; i < drawer->registeredLights.size(); i++)
 	{
 		updateShadowMap(drawer->registeredLights[i]);
