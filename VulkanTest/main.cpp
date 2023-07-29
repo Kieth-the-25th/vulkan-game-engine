@@ -1801,6 +1801,12 @@ int main() {
     i->addControlMode(c);
     i->setControlMode(0);
 
+    debugLogPosition db{};
+    db.attachedRigidbody = 0;
+    db.active = true;
+    //db.update(Scene::Physics{});
+    s->addSyncObject(&db);
+
     //std::cout << d.registeredMeshes[0].vBufferSize << "\n";
     //std::cout << d.registeredMeshes[0].iBufferSize << "\n";
 

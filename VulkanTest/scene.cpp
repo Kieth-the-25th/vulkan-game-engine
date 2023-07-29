@@ -31,15 +31,17 @@ Scene::Scene(render::Drawer* drawer) {
 
 	//Scene::mainCamera = render::Camera();
 
-	Scene::defaultConfig = new btDefaultCollisionConfiguration();
+	auto defaultConfig = new btDefaultCollisionConfiguration();
 
-	Scene::dispatcher = new btCollisionDispatcher(defaultConfig);
+	auto dispatcher = new btCollisionDispatcher(defaultConfig);
 
-	Scene::pairCache = new btDbvtBroadphase();
+	auto pairCache = new btDbvtBroadphase();
 
-	Scene::solver = new btSequentialImpulseConstraintSolver();
+	auto solver = new btSequentialImpulseConstraintSolver();
 
-	Scene::world = new btDiscreteDynamicsWorld(dispatcher, pairCache, solver, defaultConfig);
+	auto world = new btDiscreteDynamicsWorld(dispatcher, pairCache, solver, defaultConfig);
+
+	physics = {defaultConfig, dispatcher, pairCache, solver, world};
 
 	Scene::drawer = drawer;
 
@@ -47,13 +49,26 @@ Scene::Scene(render::Drawer* drawer) {
 }
 
 void Scene::step() {
-	world->getCollisionObjectArray()[0]->forceActivationState(4);
-	world->stepSimulation(1);
+	//world->getCollisionObjectArray()[0]->forceActivationState(4);
+	physics.world->stepSimulation(1);
+	std::cout << synchronizedObjects.size() << "\n";
+	for (size_t i = 0; i < synchronizedObjects.size(); i++)
+	{
+		synchronizedObjects[i]->update(physics);
+	}
 }
 
 void Scene::addRigidBody(btRigidBody::btRigidBodyConstructionInfo info) {
 	btRigidBody* body = new btRigidBody(info);
-	world->addRigidBody(body);
+	physics.world->addRigidBody(body);
+}
+
+void Scene::addSyncObject(SyncObject* o) {
+	synchronizedObjects.push_back(o);
+}
+
+void Scene::addAsyncObject(AsyncObject* o) {
+	threadedObjects.push_back(o);
 }
 
 void Scene::attachRenderer(Renderer component) {
@@ -142,9 +157,9 @@ Scene::~Scene() {
 	{
 		delete renderedScene[i].motionState;
 	}
-	delete world;
-	delete solver;
-	delete pairCache;
-	delete dispatcher;
-	delete defaultConfig;
+	delete physics.world;
+	delete physics.solver;
+	delete physics.pairCache;
+	delete physics.dispatcher;
+	delete physics.defaultConfig;
 }
