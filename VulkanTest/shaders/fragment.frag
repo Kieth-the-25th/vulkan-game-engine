@@ -10,17 +10,22 @@ layout(location = 3) in vec4 fragShadowCoord;
 
 layout(location = 0) out vec4 outColor;
 
-layout(set = 0, binding = 1) uniform LightingBufferObject {
+LightingBufferObject {
     mat4 view;
     mat4 proj;
     vec4 lightColor;
-} lbo;
+}
+
+layout(set = 0, binding = 1) buffer DirectionalLights {
+    vec4 count;
+    LightingBufferObject[] lbos;
+} lights;
 
 void main() {
     vec4 lighting = vec4(0, 0, 0, 0);
-    if (texture(shadowDepthSampler, fragShadowCoord.xy / fragShadowCoord.w).r < (fragShadowCoord.z / fragShadowCoord.w)) {
-        lighting = lbo.lightColor * 5 * (fragShadowCoord.z / fragShadowCoord.w);
-        //lighting = vec4(0, 0, fragShadowCoord.z * 30.0, 1);
+    if (fragShadowCoord.z / fragShadowCoord.w < 1.0 && texture(shadowDepthSampler, fragShadowCoord.xy / fragShadowCoord.w).r < (fragShadowCoord.z / fragShadowCoord.w)) {
+        lighting = lbo.lightColor * 1; //* (fragShadowCoord.z / fragShadowCoord.w);
+        lighting = vec4(texture(shadowDepthSampler, fragShadowCoord.xy / fragShadowCoord.w).r, fragShadowCoord.w, fragShadowCoord.z, 1);
     }
     //outColor = (vec4(texture(shadowDepthSampler, (fragShadowCoord.xy) / fragShadowCoord.w).r, 0.0, 0.0, 1.0) * 5.0) + (vec4(texture(texSampler, fragTexCoord.xy).xyz, 1.0) * 0.1);
     outColor = (lighting) + perVertexLighting * 1 + (vec4(texture(texSampler, fragTexCoord.xy).xyz, 1.0) * 0.5);

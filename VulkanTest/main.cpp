@@ -7,8 +7,6 @@
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
 
 #include <vector>
 #include <string>
@@ -20,12 +18,15 @@
 #include <stdexcept>
 #include <algorithm>
 #include <optional>
+#include <random>
 
 #include <stb_image.h>
 
 #include "render.h"
 #include "scene.h"
 #include "input.h"
+#include "objects.h"
+#include "threading.h"
 #include "bulletCustom.h"
 
 
@@ -135,14 +136,14 @@ struct Vertex {
 };
 
 const std::vector<Vertex> vertices = {
-    {{1.0f, 1.0f, 1.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f}},
-    {{1.0f, -1.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},
-    {{-1.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f}},
-    {{-1.0f, -1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f}},
+    {{1.0f, 0.0f, 1.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f}},
+    {{1.0f, 0.0f, -1.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},
+    {{-1.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f}},
+    {{-1.0f, 0.0f,-1.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f}},
 
-    {{1.0f, 1.0f, -1.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f}},
+    {{1.0f, -1.0f, 1.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f}},
     {{1.0f, -1.0f, -1.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},
-    {{-1.0f, 1.0f, -1.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f}},
+    {{-1.0f, -1.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f}},
     {{-1.0f, -1.0f, -1.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f}}
 };
 
@@ -1684,30 +1685,40 @@ int tutorialmain() {
 
 float vertLook = 0;
 float horizLook = 0;
-glm::vec3 up = glm::vec3(0.0, 0.0, 1.0);
-glm::vec3 cameraPos = glm::vec3(4.0, 0.0, 1.0);
-glm::vec3 cameraNorm = glm::vec3(1.0, 0.0, 0.0);
+glm::vec3 up = glm::vec3(0.0, 1.0, 0.0);
+glm::vec3 cameraPos = glm::vec3(4.0, 1.0, 0.0);
+glm::vec3 cameraNorm = glm::vec3(0.0, 0.0, 1.0);
+glm::vec3 cameraSide = glm::vec3(1.0, 0.0, 0.0);
+glm::vec3 bodyNorm = glm::vec3(0.0, 0.0, 1.0);
+glm::vec3 bodySide = glm::vec3(1.0, 0.0, 0.0);
+glm::vec3 playerMove = glm::vec3(0.0, 0.0, 0.0);
 
 void noclipMovement(GLFWwindow* window) {
+    playerMove = glm::vec3(0.0, 0.0, 0.0);
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
         cameraPos = cameraPos + cameraNorm;
+        playerMove = bodyNorm;
     }
     else if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
         cameraPos = cameraPos - cameraNorm;
+        playerMove = -bodyNorm;
     };
 
     if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
-        glm::vec3 add = glm::normalize(glm::cross(glm::vec3(0.0, 0.0, 1.0), cameraNorm));
+        glm::vec3 add = glm::normalize(glm::cross(glm::vec3(0.0, 1.0, 0.0), cameraNorm));
         cameraPos = cameraPos + add;
+        playerMove += bodySide;
     }
     else if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
-        glm::vec3 add = glm::normalize(glm::cross(glm::vec3(0.0, 0.0, 1.0), cameraNorm));
+        glm::vec3 add = glm::normalize(glm::cross(glm::vec3(0.0, 1.0, 0.0), cameraNorm));
         cameraPos = cameraPos - add;
+        playerMove -= bodySide;
     };
 
     if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) {
         glm::vec3 add(0.0, 0.0, 1.0);
         cameraPos = cameraPos + add;
+        playerMove.y += 20;
     }
     else if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) {
         glm::vec3 add(0.0, 0.0, 1.0);
@@ -1719,17 +1730,34 @@ void mouseLook(GLFWwindow* window, double xpos, double ypos) {
     vertLook = ypos * 0.001;
     horizLook = xpos * 0.001;
 
-    glm::vec4 fwd(1.0, 0.0, 0.0, 0.0);
+    glm::vec4 fwd(0.0, 0.0, 1.0, 0.0);
+    glm::vec4 radial(1.0, 0.0, 0.0, 0.0);
     glm::mat4 mat = glm::rotate(glm::mat4(1.0), horizLook, up);
-    glm::vec3 fwd2 = fwd * mat;
-    glm::mat4 mat2 = glm::rotate(glm::mat4(1.0), vertLook, glm::cross(fwd2, up));
-    fwd = fwd * mat * mat2;
+    fwd = fwd * mat;
+    radial = radial * mat;
+    glm::mat4 mat2 = glm::rotate(glm::mat4(1.0), vertLook, glm::cross(glm::vec3(fwd), up));
+    bodyNorm = glm::normalize(glm::vec3(fwd.x, fwd.y, fwd.z));
+    bodySide = glm::normalize(glm::vec3(radial.x, radial.y, radial.z));
+    fwd = glm::vec4(0.0, 0.0, 1.0, 0.0) * mat * mat2;
+    radial = radial * mat2;
     cameraNorm = glm::normalize(glm::vec3(fwd.x, fwd.y, fwd.z));
+    cameraSide = glm::normalize(glm::vec3(radial.x, radial.y, radial.z));
+}
+
+void debugAsyncFunc(void* v) {
+    std::vector<int>* list = reinterpret_cast<std::vector<int>*>(v);
+    std::mt19937 random{ 1 };
+    for (size_t i = 0; i < list->size(); i++)
+    {
+        (*list)[i] = random();
+    }
+    std::cout << "so true\n";
 }
 
 int main() {
     render::Drawer* d = new render::Drawer();
-    Scene* s = new Scene{d};
+    Threading* t = new Threading();
+    Scene* s = new Scene{t, d};
     Input* i = new Input(d->window);
 
     std::cout << "Finished initialization\n";
@@ -1738,18 +1766,19 @@ int main() {
     d->loadMesh("textures/debug.obj", &modelIndex);
     std::cout << d->registeredMeshes[modelIndex].vBufferSize;
 
-    btBoxShape box({ 5, 5, 0.5 });
+    btBoxShape box({ 20, 0.5, 20 });
     btBoxShape box2({ 1, 1, 1 });
+    btCapsuleShape player(1, 2);
+    btSphereShape ball(1);
 
     {
-        btTransform origin({ 0, 0, 0, 1 }, { 0, 0.5, 10 });
+        btTransform origin({ 0, 0, 0, 1 }, { 0, 10, 0.5 });
         btScalar mass(1.f);
-        glm::mat4 scale(0.0);
-        scale[0][0] = 1;
+        glm::mat4 scale(1.0);
+        /*scale[0][0] = 1;
         scale[1][1] = 1;
         scale[2][2] = 1;
-        scale[3][3] = 1;
-        //btDefaultMotionState* state = new btDefaultMotionState(origin);
+        scale[3][3] = 1;*/
         btCustomMotionState* state = new btCustomMotionState{ origin, btTransform::getIdentity(), scale };
         s->addRigidBody(btRigidBody::btRigidBodyConstructionInfo{ mass, state, &box2, {1, 1, 1} });
         s->attachRenderer(Renderer(&(d->registeredMeshes[modelIndex]), 1, state));
@@ -1758,11 +1787,10 @@ int main() {
     {
         btTransform origin({ 0, 0, 0, 1 }, { 0, 0, 0 });
         btScalar mass(0.f);
-        //btDefaultMotionState* state = new btDefaultMotionState(origin);
         glm::mat4 scale(0.0);
-        scale[0][0] = 20;
-        scale[1][1] = 20;
-        scale[2][2] = 1;
+        scale[0][0] = 50;
+        scale[1][1] = 1;
+        scale[2][2] = 50;
         scale[3][3] = 1;
         btCustomMotionState* state = new btCustomMotionState{ origin, btTransform::getIdentity(), scale };
         s->addRigidBody(btRigidBody::btRigidBodyConstructionInfo{ mass, state, &box, {1, 1, 1} });
@@ -1784,18 +1812,34 @@ int main() {
     }
 
     {
-        btTransform origin({ 0, 0, 0, 1 }, { 0, -5, 0 });
+        btTransform origin({ 0, 0, 0, 1 }, { 0, 0, -5 });
         btScalar mass(0.f);
         glm::mat4 scale(0.0);
         scale[0][0] = 1;
         scale[1][1] = 1;
         scale[2][2] = 1;
         scale[3][3] = 1;
-        //btDefaultMotionState* state = new btDefaultMotionState(origin);
         btCustomMotionState* state = new btCustomMotionState{ origin, btTransform::getIdentity(), scale };
         s->addRigidBody(btRigidBody::btRigidBodyConstructionInfo{ mass, state, &box2, {1, 1, 1} });
         s->attachRenderer(Renderer(&(d->registeredMeshes[modelIndex]), 1, state));
     }
+
+    btRigidBody* playerRigid;
+    btCustomMotionState* playerState;
+    {
+        btTransform origin({ 0, 0, 0, 1 }, { 0, 20, 0 });
+        btScalar mass(8.0f);
+        glm::mat4 scale(0.0);
+        scale[0][0] = 1;
+        scale[1][1] = 1;
+        scale[2][2] = 1;
+        scale[3][3] = 1;
+        playerState = new btCustomMotionState{ origin, btTransform::getIdentity(), scale };
+        playerRigid = s->addRigidBody(btRigidBody::btRigidBodyConstructionInfo{ mass, playerState, &ball, {1, 1, 1} });
+        s->attachRenderer(Renderer(&(d->registeredMeshes[modelIndex]), 1, playerState));
+    }
+
+    //playerControl control{};
 
     Input::ControlMode c(nullptr, mouseLook, GLFW_RAW_MOUSE_MOTION);
     i->addControlMode(c);
@@ -1804,22 +1848,49 @@ int main() {
     debugLogPosition db{};
     db.attachedRigidbody = 0;
     db.active = true;
-    //db.update(Scene::Physics{});
     s->addSyncObject(&db);
 
-    //std::cout << d.registeredMeshes[0].vBufferSize << "\n";
-    //std::cout << d.registeredMeshes[0].iBufferSize << "\n";
+    std::vector<int> randomList(100);
+    Work w(&randomList, debugAsyncFunc);
+    std::cout << "state: " << w.completion << "\n";
+    //t->addWork(&w);
+    //i->setCallback(playerControl);
 
     while (!glfwWindowShouldClose(d->window)) {
         glfwPollEvents();
         noclipMovement(d->window);
-        //std::cout << cameraNorm.x << " " << cameraNorm.y << " " << cameraNorm.z << "\n";
+
+        /*glm::vec3 impulse{};
+        float movelength = glm::vec3(control.movement.x, 0, control.movement.z).length();
+        if (movelength > 10) {
+            impulse = control.movement * (10 / movelength);
+        }*/
+        playerRigid->activate();
+        playerRigid->applyCentralForce(btVector3{playerMove.x, playerMove.y, playerMove.z});
+        glm::mat4 playerMatrix{};
+        playerState->getGraphicsTransform(&playerMatrix);
+        cameraPos = glm::vec3(playerMatrix[3][0], playerMatrix[3][1], playerMatrix[3][2]);
+        s->changeView(glm::lookAt(cameraPos, cameraPos + cameraNorm, up));
         s->step();
-        s->drawObjects(glm::lookAt(cameraPos, cameraPos + cameraNorm, glm::vec3(0.0, 0.0, 1.0)));
+        s->drawObjects();
+        //std::cout << playerMove.x << " " << playerMove.y << " " << playerMove.z << "\n";
+        /*
+        if (w.completion) {
+            std::cout << "complete\n";
+            if (w.ownership.try_lock()) {
+                std::cout << "got list:\n";
+                for (int i = 0; i < randomList.size(); i++) {
+                    //std::cout << randomList[i] << '\n';
+                }
+                w.ownership.unlock();
+            }
+        }
+        */
     }
 
     delete d;
     delete s;
+    delete t;
 
     //TODO: flush cout to log
 

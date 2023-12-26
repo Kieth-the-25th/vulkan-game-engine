@@ -1,5 +1,6 @@
 #include "scene.h"
 #include "render.h"
+#include "threading.h"
 
 #include <GLFW/glfw3.h>
 
@@ -26,7 +27,7 @@ Renderer::Renderer(render::Mesh* mesh, uint8_t count, btCustomMotionState* motio
 	this->count = count;
 }
 
-Scene::Scene(render::Drawer* drawer) {
+Scene::Scene(Threading* threading, render::Drawer* drawer) {
 	Scene::timestep = static_cast<float>(1) / 60;
 
 	//Scene::mainCamera = render::Camera();
@@ -45,29 +46,30 @@ Scene::Scene(render::Drawer* drawer) {
 
 	Scene::drawer = drawer;
 
-	world->setGravity({ 0, 0, -9.81 });
+	world->setGravity({ 0, -2, 0 });
 }
 
 void Scene::step() {
 	//world->getCollisionObjectArray()[0]->forceActivationState(4);
 	physics.world->stepSimulation(1);
-	std::cout << synchronizedObjects.size() << "\n";
+	//std::cout << synchronizedObjects.size() << "\n";
 	for (size_t i = 0; i < synchronizedObjects.size(); i++)
 	{
 		synchronizedObjects[i]->update(physics);
 	}
 }
 
-void Scene::addRigidBody(btRigidBody::btRigidBodyConstructionInfo info) {
+btRigidBody* Scene::addRigidBody(btRigidBody::btRigidBodyConstructionInfo info) {
 	btRigidBody* body = new btRigidBody(info);
 	physics.world->addRigidBody(body);
+	return body;
 }
 
-void Scene::addSyncObject(SyncObject* o) {
+void Scene::addSyncObject(SyncFunc* o) {
 	synchronizedObjects.push_back(o);
 }
 
-void Scene::addAsyncObject(AsyncObject* o) {
+void Scene::addAsyncObject(AsyncFunc* o) {
 	threadedObjects.push_back(o);
 }
 
@@ -77,27 +79,33 @@ void Scene::attachRenderer(Renderer component) {
 	/* TODO: sorting function? */
 }
 
+inline void drawSceneObjects(render::Drawer* d, std::vector<Renderer> o) {
+	for (size_t i = 0; i < o.size(); i++)
+	{
+		glm::mat4 m{};
+		btTransform transform;
+		o[i].motionState->getGraphicsTransform(&m);
+		for (size_t j = 0; j < o[i].mesh->submeshes.size(); j++)
+		{
+			d->draw(o[i].mesh, &o[i].mesh->submeshes[j], &(d->registeredMaterials[o[i].mesh->submeshes[j].materialIndex]), m, false);
+		}
+	}
+}
+
 void Scene::updateShadowMap(render::Light* l) {
 	//l.updateTransform(glm::mat4(1.0), drawer->currentFrame);
 	std::vector<VkClearValue> clearValues;
 	clearValues.resize(1);
 	clearValues[0].depthStencil = { 0.0, 0 };
-	drawer->beginPass(l->frames[drawer->currentSwapchainIndex], drawer->shadowPass, clearValues, {512, 512});
+
+	drawer->beginPass(drawer->shadowFrames[drawer->currentSwapchainIndex], drawer->shadowPass, clearValues, {512, 512});
 	drawer->bindShadowPassPipeline();
+	//drawSceneObjects(drawer, renderedScene);
 	for (size_t i = 0; i < Scene::renderedScene.size(); i++)
 	{
 		glm::mat4 m{};
 		btTransform transform;
 		renderedScene[i].motionState->getGraphicsTransform(&m);
-		//renderedScene[i].motionState->getWorldTransform(transform);
-		//transform.getOpenGLMatrix(reinterpret_cast<btScalar*>(&m));
-
-		/*std::cout << m[0][0] << " " << m[1][0] << " " << m[2][0] << " " << m[3][0] << "\n";
-		std::cout << m[0][1] << " " << m[1][1] << " " << m[2][1] << " " << m[3][1] << "\n";
-		std::cout << m[0][2] << " " << m[1][2] << " " << m[2][2] << " " << m[3][2] << "\n";
-		std::cout << m[0][3] << " " << m[1][3] << " " << m[2][3] << " " << m[3][3] << "\n";*/
-
-		//std::cout << "submesh count:" << (int)Scene::renderedScene[i].mesh->submeshes.size() << "\n";
 		for (size_t j = 0; j < Scene::renderedScene[i].mesh->submeshes.size(); j++)
 		{
 			drawer->draw(Scene::renderedScene[i].mesh, &Scene::renderedScene[i].mesh->submeshes[j], &(drawer->registeredMaterials[Scene::renderedScene[i].mesh->submeshes[j].materialIndex]), m, false);
@@ -107,15 +115,15 @@ void Scene::updateShadowMap(render::Light* l) {
 };
 
 
-void Scene::drawObjects(glm::mat4 cameraView) {
+void Scene::drawObjects() {
 	std::vector<glm::mat4> lightViews;
 	std::vector<double> fovs;
-	glm::mat4 testView = glm::lookAt(glm::vec3(4.0, 0, 10.0), glm::vec3(0, 0, 0), glm::vec3(1, 0, 0));
+	glm::mat4 testView = glm::lookAt(glm::vec3(6.0, 3.0, 6.0), glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
 
 	lightViews.push_back(testView);
 	fovs.push_back(90);
 
-	drawer->beginFrame(cameraView, 90, lightViews, fovs);
+	drawer->beginFrame(mainCameraView, 90, lightViews, fovs);
 	/*for (size_t i = 0; i < drawer->registeredLights.size(); i++)
 	{
 		updateShadowMap(drawer->registeredLights[i]);
@@ -131,15 +139,6 @@ void Scene::drawObjects(glm::mat4 cameraView) {
 		glm::mat4 m{};
 		btTransform transform;
 		renderedScene[i].motionState->getGraphicsTransform(&m);
-		//renderedScene[i].motionState->getWorldTransform(transform);
-		//transform.getOpenGLMatrix(reinterpret_cast<btScalar*>(&m));
-
-		/*std::cout << m[0][0] << " " << m[1][0] << " " << m[2][0] << " " << m[3][0] << "\n";
-		std::cout << m[0][1] << " " << m[1][1] << " " << m[2][1] << " " << m[3][1] << "\n";
-		std::cout << m[0][2] << " " << m[1][2] << " " << m[2][2] << " " << m[3][2] << "\n";
-		std::cout << m[0][3] << " " << m[1][3] << " " << m[2][3] << " " << m[3][3] << "\n";*/
-
-		//std::cout << "submesh count:" << (int)Scene::renderedScene[i].mesh->submeshes.size() << "\n";
 		for (size_t j = 0; j < Scene::renderedScene[i].mesh->submeshes.size(); j++)
 		{
 			drawer->draw(Scene::renderedScene[i].mesh, &Scene::renderedScene[i].mesh->submeshes[j], &(drawer->registeredMaterials[Scene::renderedScene[i].mesh->submeshes[j].materialIndex]), m, true);
@@ -150,6 +149,10 @@ void Scene::drawObjects(glm::mat4 cameraView) {
 	drawer->endFrame();
 	//
 	//
+}
+
+void Scene::changeView(glm::mat4 view) {
+	mainCameraView = view;
 }
 
 Scene::~Scene() {

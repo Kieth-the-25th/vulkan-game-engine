@@ -315,7 +315,7 @@ inline void createImageViews(Drawer* d) {
 inline void createFramebuffers(Drawer* d) {
     for (uint32_t i = 0; i < d->frames.size(); i++)
     {
-        std::cout << &(d->frames[i].framebuffer) << "\n";
+        std::cout << "Framebuffer:" << &(d->frames[i].framebuffer) << "\n";
         VkImageView attatchments[] = {
             d->frames[i].swapchainImageView,
             d->depthView
@@ -397,13 +397,12 @@ inline void createRenderPass(Drawer* d) {
     }
 }
 
-//
 inline void createDepthOnlyPass(Drawer* d) {
     VkAttachmentReference depthAttachmentRef{};
     depthAttachmentRef.attachment = 0;
     depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
-    std::cout << findDepthSamplerFormat(d->physicalDevice) << "\n";
+    std::cout << "Found format: " << findDepthSamplerFormat(d->physicalDevice) << "\n";
     VkAttachmentDescription depthAttachment{};
     depthAttachment.format = findDepthSamplerFormat(d->physicalDevice);
     depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -627,7 +626,6 @@ inline void createGraphicsPipeline(Drawer* d, std::vector<char> shaders[], Mater
     vkDestroyShaderModule(d->device, fShader, nullptr);
 }
 
-//
 inline void createDepthOnlyPipeline(Drawer* d) {
     std::vector<char> shaders[] = { getBytes("shaders/shadowmapv.spv"), getBytes("shaders/shadowmapf.spv") };
     VkShaderModule vShader = createShaderModule(d->device, shaders[0]);
@@ -801,7 +799,6 @@ inline void createDefaultDescSetLayout(Drawer* d) {
     };
 }
 
-//
 inline void createShadowDescSetLayout(Drawer* d) {
     VkDescriptorSetLayoutBinding binding{};
     binding.binding = 0;
@@ -831,7 +828,7 @@ inline void createFrameDescriptorSets(Drawer* d) {
 
     bindings[1].binding = 1;
     bindings[1].descriptorCount = 1;
-    bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     bindings[1].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 
     bindings[2].binding = 2;
@@ -872,14 +869,14 @@ inline void createFrameDescriptorSets(Drawer* d) {
         bInfo.range = sizeof(UniformBufferObject);
 
         VkDescriptorBufferInfo b2Info{};
-        b2Info.buffer = d->frameOrder[i].baseLightBuffer;
+        b2Info.buffer = d->frameOrder[i].dLightBuffer;
         b2Info.offset = 0;
-        b2Info.range = sizeof(LightBufferObject);
+        b2Info.range = (d->shadowMapSize * d->shadowMapSize * sizeof(LightBufferObject)) + sizeof(glm::vec4);
 
         VkDescriptorImageInfo iInfo{};
         iInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-        iInfo.imageView = d->mainLight->shMapView;
-        iInfo.sampler = d->mainLight->shMapSampler;
+        iInfo.imageView = d->shadowView;
+        iInfo.sampler = d->shadowSampler;
 
         VkDescriptorBufferInfo b3Info{};
         b3Info.buffer = d->frameOrder[i].vLightBuffer;
@@ -901,7 +898,7 @@ inline void createFrameDescriptorSets(Drawer* d) {
         descriptorWrites[1].dstSet = descriptors[i];
         descriptorWrites[1].dstBinding = 1;
         descriptorWrites[1].dstArrayElement = 0;
-        descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         descriptorWrites[1].descriptorCount = 1;
         descriptorWrites[1].pBufferInfo = &b2Info;
 
@@ -920,7 +917,6 @@ inline void createFrameDescriptorSets(Drawer* d) {
         descriptorWrites[3].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         descriptorWrites[3].descriptorCount = 1;
         descriptorWrites[3].pBufferInfo = &b3Info;
-
 
         vkUpdateDescriptorSets(d->device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
 
@@ -1045,6 +1041,97 @@ inline void createDepthStuff(Drawer* d) {
     vkCreateSampler(d->device, &depthSamplerCreateInfo, nullptr, &(d->depthSampler));
 }
 
+inline void createShadowAtlas(Drawer* d) {
+    VkFormat format = findDepthSamplerFormat(d->physicalDevice);
+    std::cout << format << "\n";
+    int iSize = d->shadowMapDetail * d->shadowMapSize;
+    createImage(d->device, d->physicalDevice, iSize, iSize, 1, format, VK_IMAGE_TILING_OPTIMAL, 0, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, d->shadowAtlas, d->shadowMapMemory);
+    d->shadowView = createImageView(d->device, d->shadowAtlas, VK_IMAGE_VIEW_TYPE_2D, format, VK_IMAGE_ASPECT_DEPTH_BIT);
+
+    VkSamplerCreateInfo samplerInfo{};
+    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    samplerInfo.magFilter = VK_FILTER_LINEAR;
+    samplerInfo.minFilter = VK_FILTER_LINEAR;
+    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    samplerInfo.anisotropyEnable = VK_TRUE;
+    VkPhysicalDeviceProperties properties{};
+    vkGetPhysicalDeviceProperties(d->physicalDevice, &properties);
+    samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
+    samplerInfo.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+    samplerInfo.unnormalizedCoordinates = VK_FALSE;
+    samplerInfo.compareEnable = VK_FALSE;
+    samplerInfo.compareOp = VK_COMPARE_OP_NEVER;
+    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    samplerInfo.mipLodBias = 0.0f;
+    samplerInfo.minLod = 0.0f;
+    samplerInfo.maxLod = 0.0f;
+    samplerInfo.anisotropyEnable = VK_TRUE;
+
+    if (vkCreateSampler(d->device, &samplerInfo, nullptr, &(d->shadowSampler)) != VK_SUCCESS) {
+        std::runtime_error("Failed to create image sampler");
+    }
+
+    d->shadowFrames.resize(d->frames.size());
+    for (size_t i = 0; i < d->frames.size(); i++)
+    {
+        VkImageView attatchments[] = {
+            d->shadowView
+        };
+
+        VkFramebufferCreateInfo createInfo{};
+        createInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        createInfo.renderPass = d->shadowPass;
+        createInfo.pAttachments = attatchments;
+        createInfo.width = d->shadowMapSize * d->shadowMapDetail;
+        createInfo.height = d->shadowMapSize * d->shadowMapDetail;
+        createInfo.attachmentCount = 1;
+        createInfo.layers = 1;
+
+        if (vkCreateFramebuffer(d->device, &createInfo, nullptr, &(d->shadowFrames[i])) != VK_SUCCESS) {
+            throw std::runtime_error("failed to create framebuffer!");
+        }
+    }
+
+    d->shadowFramePositions.resize(d->FRAMES_IN_FLIGHT);
+    d->shadowFrameSets.resize(d->FRAMES_IN_FLIGHT);
+    d->shadowMappedMemory.resize(d->FRAMES_IN_FLIGHT);
+
+    std::vector<VkDescriptorSetLayout> layouts(d->FRAMES_IN_FLIGHT, d->shadowMappingLayout);
+    VkDescriptorSetAllocateInfo allocateInfo{};
+    allocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    allocateInfo.descriptorPool = d->descPool;
+    allocateInfo.descriptorSetCount = static_cast<uint32_t>(d->FRAMES_IN_FLIGHT);
+    allocateInfo.pSetLayouts = layouts.data();
+    if (vkAllocateDescriptorSets(d->device, &allocateInfo, d->shadowFrameSets.data()) != VK_SUCCESS) {
+        throw std::runtime_error("failed to allocate descriptor sets!");
+    }
+
+    for (size_t i = 0; i < d->shadowFramePositions.size(); i++)
+    {
+        //createBuffer(d->device, d->physicalDevice, sizeof(LightBufferObject), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, shadowFramePositions[i].buffer, framePositions[i].memory);
+        //vkMapMemory(d->device, framePositions[i].memory, 0, sizeof(LightBufferObject), 0, &d->shadowMappedMemory[i]);
+
+        VkDescriptorBufferInfo bInfo{};
+        bInfo.buffer = d->frameOrder[i].dLightBuffer;
+        bInfo.offset = 0;
+        bInfo.range = sizeof(LightBufferObject);
+
+        std::vector<VkWriteDescriptorSet> descriptorWrites{};
+        descriptorWrites.resize(1);
+
+        descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrites[0].dstSet = d->shadowFrameSets[i];
+        descriptorWrites[0].dstBinding = 0;
+        descriptorWrites[0].dstArrayElement = 0;
+        descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        descriptorWrites[0].descriptorCount = 1;
+        descriptorWrites[0].pBufferInfo = &bInfo;
+
+        vkUpdateDescriptorSets(d->device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
+    }
+}
 
 inline void createUniformBuffers(Drawer* d) {
     VkDeviceSize size = sizeof(UniformBufferObject);
@@ -1056,8 +1143,8 @@ inline void createUniformBuffers(Drawer* d) {
         createBuffer(d->device, d->physicalDevice, size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, d->frameOrder[i].uniformBuffer, d->frameOrder[i].uniformBufferMemory);
         vkMapMemory(d->device, d->frameOrder[i].uniformBufferMemory, 0, size, 0, &(d->frameOrder[i].uniformMappedMemory));
 
-        createBuffer(d->device, d->physicalDevice, size2, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, d->frameOrder[i].baseLightBuffer, d->frameOrder[i].baseLightBufferMemory);
-        vkMapMemory(d->device, d->frameOrder[i].baseLightBufferMemory, 0, size2, 0, &(d->frameOrder[i].lightMappedMemory));
+        createBuffer(d->device, d->physicalDevice, size2, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, d->frameOrder[i].dLightBuffer, d->frameOrder[i].dLightBufferMemory);
+        vkMapMemory(d->device, d->frameOrder[i].dLightBufferMemory, 0, size2, 0, &(d->frameOrder[i].lightMappedMemory));
 
         createBuffer(d->device, d->physicalDevice, size3, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, d->frameOrder[i].vLightBuffer, d->frameOrder[i].vLightMemory);
     }
@@ -1112,7 +1199,7 @@ inline void createKTXstuff(Drawer* d) {
 }
 
 inline void test(Drawer* d) {
-    for (size_t i = 0; i < d->frameOrder.size(); i++)
+    /*for (size_t i = 0; i < d->frameOrder.size(); i++)
     {
         VkDescriptorImageInfo iInfo{};
         iInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
@@ -1133,7 +1220,7 @@ inline void test(Drawer* d) {
         descriptorWrites[0].pImageInfo = &iInfo;
 
         vkUpdateDescriptorSets(d->device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
-    }
+    }*/
 }
 
 Drawer::Drawer() {
@@ -1171,7 +1258,9 @@ void Drawer::init() {
     createUniformBuffers(this);
     createCommandBuffers(this);
     createShadowDescSetLayout(this);
+    createShadowAtlas(this);
     mainLight = new Light(this, glm::mat4(10.0), 60, true);
+
     createFrameDescriptorSets(this);
     createKTXstuff(this);
     std::cout << "Creating debug objects...\n";
@@ -1231,6 +1320,10 @@ void Drawer::beginPass(std::vector<VkClearValue> clearValues) {
 };
 
 void Drawer::beginPass(VkFramebuffer frame, VkRenderPass pass, std::vector<VkClearValue> clearValues, VkExtent2D ext) {
+    Drawer::beginPass(frame, pass, clearValues, ext, { 0, 0 });
+}
+
+void Drawer::beginPass(VkFramebuffer frame, VkRenderPass pass, std::vector<VkClearValue> clearValues, VkExtent2D ext, VkOffset2D offset) {
     VkRenderPassBeginInfo renderPassInfo{};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     renderPassInfo.renderPass = pass;
@@ -1273,8 +1366,27 @@ inline void updateUBOs(Drawer* d, int frame, glm::mat4 cameraView, double FOV, s
     lbo.view = lightViews[0];
     lbo.proj = glm::perspective(glm::radians(lightFOVs[0]), 1.0, 100.0, 0.1);
     lbo.color = { 1, 1, 1, 1 };
-    memcpy(d->mainLight->mappedMemory[frame], &lbo, sizeof(lbo));
-    memcpy(d->frameOrder[frame].lightMappedMemory, &lbo, sizeof(lbo));
+    //memcpy(d->mainLight->mappedMemory[frame], &lbo, sizeof(lbo));
+    //memcpy(d->frameOrder[frame].lightMappedMemory, &lbo, sizeof(lbo));
+
+    ShadowAtlasDescriptor sad{};
+    //memcpy(d->shadowMappedMemory[frame], &sad, sizeof(sad));
+    std::vector<glm::vec4> colors;
+    std::vector<glm::mat4> views;
+    std::vector<glm::mat4> projs;
+    for (int i = 0; i < d->registeredLights.size(); i++) {
+        double dist = 0.1;
+        for (int j = 0; j < d->registeredLights[i].cascades.size(); j++) {
+            colors.push_back(d->registeredLights[i].color);
+            views.push_back(d->registeredLights[i].transform);
+            projs.push_back(glm::perspective(glm::radians(d->registeredLights[i].FOV), d->extent.width / (double)d->extent.height, dist + d->registeredLights[i].cascades[j], dist));
+            dist = dist + d->registeredLights[i].cascades[j];
+        }
+    }
+    sad.colors = colors.data();
+    sad.views = views.data();
+    sad.projs = projs.data();
+    memcpy(d->frameOrder[frame].lightMappedMemory, &sad, sizeof(sad));
 
     vkUtil::begincpy(d->device, d->commandPool);
     VkBufferCopy cpy1{};
@@ -1283,15 +1395,14 @@ inline void updateUBOs(Drawer* d, int frame, glm::mat4 cameraView, double FOV, s
     cpy1.size = sizeof(glm::vec4);
     glm::vec4 data;
     data.x = static_cast<float>(d->vertexLights.size());
-    std::cout << cpy1.size << "\n";
     vkUtil::gpumemcpy(d->device, d->physicalDevice, d->graphicsQueue, d->commandPool, d->frameOrder[frame].vLightBuffer, &data, cpy1);
+
     VkBufferCopy cpy2{};
     cpy2.dstOffset = sizeof(glm::vec4);
     cpy2.srcOffset = 0;
     cpy2.size = sizeof(VertexLight) * d->vertexLights.size();
-    std::cout << cpy2.size << "\n";
     vkUtil::gpumemcpy(d->device, d->physicalDevice, d->graphicsQueue, d->commandPool, d->frameOrder[frame].vLightBuffer, d->vertexLights.data(), cpy2);
-    vkUtil::endcpy(d->graphicsQueue);
+    vkUtil::endcpy(d->device, d->commandPool, d->graphicsQueue);
 
 #ifdef DEBUG_GRAPHICS
     std::cout << lbo.proj[0][0] << " " << lbo.proj[0][1] << " " << lbo.proj[0][2] << " " << lbo.proj[0][3] << "\n";
@@ -1357,7 +1468,7 @@ void Drawer::beginFrame(glm::mat4 cameraView, double FOV, std::vector<glm::mat4>
 
 void Drawer::bindShadowPassPipeline() {
     vkCmdBindPipeline(frameOrder[currentFrame].frameCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shadowPipeline);
-    vkCmdBindDescriptorSets(frameOrder[currentFrame].frameCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shadowPipelineLayout, 0, 1, &(mainLight->frameSets[currentFrame]), 0, nullptr);
+    vkCmdBindDescriptorSets(frameOrder[currentFrame].frameCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shadowPipelineLayout, 0, 1, &(frameOrder[currentFrame].frameDescSet), 0, nullptr);
 }
 
 /* Record the command buffer with all the draw commands */
@@ -1367,14 +1478,14 @@ void Drawer::draw() {
 void Drawer::draw(Sprite* s) {
 
 }
-void Drawer::draw(Mesh* m, Submesh* s, Material* mat, glm::mat4 modelMatrix, bool bindMaterial) {
+void Drawer::draw(Mesh* m, Submesh* s, Material* mat, glm::mat4 modelMatrix, glm::vec4 data, bool bindMaterial) {
     if ((frameOrder[currentFrame].boundMaterial == nullptr || mat != frameOrder[currentFrame].boundMaterial) && bindMaterial) {
 #ifdef DEBUG_GRAPHICS
         std::cout << "Binding new material...\n";
 #endif
         frameOrder[currentFrame].boundMaterial = mat;
         vkCmdBindPipeline(frameOrder[currentFrame].frameCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mat->pipeline);
-        std::vector<VkDescriptorSet> sets = { frameOrder[currentFrame].frameDescSet, (mat->materialDescriptor)};
+        std::vector<VkDescriptorSet> sets = { frameOrder[currentFrame].frameDescSet, (mat->materialDescriptor) };
         vkCmdBindDescriptorSets(frameOrder[currentFrame].frameCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mat->layout, 0, sets.size(), sets.data(), 0, nullptr);
     }
 #ifdef DEBUG_GRAPHICS
@@ -1386,6 +1497,7 @@ void Drawer::draw(Mesh* m, Submesh* s, Material* mat, glm::mat4 modelMatrix, boo
     VkDeviceSize offsets[] = { 0 };
     PushConstant push{};
     push.model = modelMatrix;
+    push.data = data;
 
     //std::cout << modelMatrix[0][0] << " " << modelMatrix[1][0] << " " << modelMatrix[2][0] << " " << modelMatrix[3][0] << "\n";
     //std::cout << modelMatrix[0][1] << " " << modelMatrix[1][1] << " " << modelMatrix[2][1] << " " << modelMatrix[3][1] << "\n";
@@ -1397,6 +1509,9 @@ void Drawer::draw(Mesh* m, Submesh* s, Material* mat, glm::mat4 modelMatrix, boo
     vkCmdPushConstants(frameOrder[currentFrame].frameCommandBuffer, mat->layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstant), &push);
     vkCmdDrawIndexed(frameOrder[currentFrame].frameCommandBuffer, static_cast<uint32_t>(s->iBufferSize), 1, 0, 0, 0);
     //Pipeline not being bound?
+}
+void Drawer::draw(Mesh* m, Submesh* s, Material* mat, glm::mat4 modelMatrix, bool bindMaterial) {
+    draw(m, s, mat, modelMatrix, glm::vec4(0), bindMaterial);
 }
 
 void Drawer::endPass() {
@@ -1446,7 +1561,7 @@ void Drawer::endFrame() {
     presentInfo.pImageIndices = &currentSwapchainIndex;
     presentInfo.pResults = nullptr; // Optional
 
-    std::cout << currentSwapchainIndex << " " << currentFrame << "\n";
+    //std::cout << currentSwapchainIndex << " " << currentFrame << "\n";
 
     VkResult result = vkQueuePresentKHR(presentQueue, &presentInfo);
 
@@ -1509,8 +1624,8 @@ Drawer::~Drawer() {
         vkDestroyBuffer(device, frameOrder[i].uniformBuffer, nullptr);
         vkFreeMemory(device, frameOrder[i].uniformBufferMemory, nullptr);
 
-        vkDestroyBuffer(device, frameOrder[i].baseLightBuffer, nullptr);
-        vkFreeMemory(device, frameOrder[i].baseLightBufferMemory, nullptr);
+        vkDestroyBuffer(device, frameOrder[i].dLightBuffer, nullptr);
+        vkFreeMemory(device, frameOrder[i].dLightBufferMemory, nullptr);
 
         vkDestroyBuffer(device, frameOrder[i].vLightBuffer, nullptr);
         vkFreeMemory(device, frameOrder[i].vLightMemory, nullptr);
@@ -1617,7 +1732,7 @@ inline void stbTextureLoad(Drawer* d, const char* dir, VkImage* imgBuffer, VkFor
 
     vkCmdCopyBufferToImage(cmdBuffer, staging, *imgBuffer, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
-    endSimpleCommands(cmdBuffer, d->graphicsQueue);
+    endSimpleCommands(d->device, d->commandPool, cmdBuffer, d->graphicsQueue);
     transitionImageLayout(d->device, d->graphicsQueue, d->commandPool, *imgBuffer, format, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, finalLayout, aspect);
 
     vkDestroyBuffer(d->device, staging, nullptr);
@@ -1655,7 +1770,7 @@ inline void ktxTextureLoad(Drawer* d, const char* dir, ktxTexture2* texture, ktx
     //std::cout << dstTexture->height << "\n";
 }
 
-render::Texture::Texture(Drawer* d, const char* dir, VkImageViewType imageType) {
+Texture::Texture(Drawer* d, const char* dir, VkImageViewType imageType) {
     ktxTexture2* texPtr = &texture;
     ktxTextureLoad(d, dir, texPtr, &vkTexture, VK_IMAGE_USAGE_SAMPLED_BIT);
     texture = *texPtr;
@@ -1696,10 +1811,13 @@ void Texture::free(Drawer* d) {
     vkFreeMemory(d->device, vkTexture.deviceMemory, nullptr);
 }
 
-render::Light::Light(Drawer* d, glm::mat4 origin, float FOV, bool isDynamic) {
+Light::Light(Drawer* d, glm::mat4 origin, float FOV, bool isDynamic) {
     transform = origin;
     this->FOV = FOV;
-    this->isDynamic = isDynamic;
+    //this->isDynamic = isDynamic;
+
+    
+    /*
     VkFormat format = findDepthSamplerFormat(d->physicalDevice);
     std::cout << format << "\n";
     createImage(d->device, d->physicalDevice, 512, 512, 1, format, VK_IMAGE_TILING_OPTIMAL, 0, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, this->shMap, this->shMapMemory);
@@ -1788,10 +1906,11 @@ render::Light::Light(Drawer* d, glm::mat4 origin, float FOV, bool isDynamic) {
 
         vkUpdateDescriptorSets(d->device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
     }
+    */
 };
 
 void Light::free(Drawer* d) {
-    vkDestroyImage(d->device, shMap, nullptr);
+    /*kDestroyImage(d->device, shMap, nullptr);
     vkDestroyImageView(d->device, shMapView, nullptr);
     vkFreeMemory(d->device, shMapMemory, nullptr);
     vkDestroySampler(d->device, shMapSampler, nullptr);
@@ -1805,18 +1924,18 @@ void Light::free(Drawer* d) {
     {
         vkDestroyBuffer(d->device, framePositions[i].buffer, nullptr);
         vkFreeMemory(d->device, framePositions[i].memory, nullptr);
-    }
+    }*/
 }
 
-render::Material::Material() {
-
-}
-
-render::Submesh::Submesh() {
+Material::Material() {
 
 }
 
-render::Submesh::Submesh(const Drawer* d, Submesh::SubmeshCreateInfo info) {
+Submesh::Submesh() {
+
+}
+
+Submesh::Submesh(const Drawer* d, Submesh::SubmeshCreateInfo info) {
     this->materialIndex = info.materialIndex;
     createBuffer(d->device, d->physicalDevice, info.count * sizeof(uint16_t), VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, indexBuffer, indexMemory);
     iBufferSize = info.count;

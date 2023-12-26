@@ -2,12 +2,13 @@
 
 #include <vector>
 #include "render.h"
+#include "threading.h"
 #include "btBulletDynamicsCommon.h"
 #include "btBulletCollisionCommon.h"
 #include "bulletCustom.h"
 
-class SyncObject;
-class AsyncObject;
+class SyncFunc;
+class AsyncFunc;
 
 struct Renderer {
 	btCustomMotionState* motionState;
@@ -19,15 +20,16 @@ struct Renderer {
 
 class Scene {
 public:
-	Scene(render::Drawer* drawer);
+	Scene(Threading* threading, render::Drawer* drawer);
 
 	void step();
-	void addRigidBody(btRigidBody::btRigidBodyConstructionInfo info);
+	btRigidBody* addRigidBody(btRigidBody::btRigidBodyConstructionInfo info);
 	void attachRenderer(Renderer component);
-	void addSyncObject(SyncObject* o);
-	void addAsyncObject(AsyncObject* o);
+	void addSyncObject(SyncFunc* o);
+	void addAsyncObject(AsyncFunc* o);
 	void updateShadowMap(render::Light* l);
-	void drawObjects(glm::mat4 cameraView);
+	void changeView(glm::mat4 view);
+	void drawObjects();
 
 	~Scene();
 
@@ -50,26 +52,28 @@ private:
 
 	glm::vec3 up;
 
-	//render::Camera mainCamera;
+	glm::mat4 mainCameraView;
+	double fov;
 
 	render::Drawer* drawer;
 
 	Physics physics;
+	Threading* threading;
 
 	std::vector<Renderer> renderedScene;
-	std::vector<SyncObject*> synchronizedObjects;
-	std::vector<AsyncObject*> threadedObjects;
+	std::vector<SyncFunc*> synchronizedObjects;
+	std::vector<AsyncFunc*> threadedObjects;
 };
 
 typedef void (*AsyncMessage)(Scene* scene);
 
-class AsyncObject {
+class AsyncFunc {
 public:
 	bool active = true;
 	virtual void update(const std::vector<AsyncMessage> messageList, const Scene* scene) {};
 };
 
-class debugCollisionSendMessage : AsyncObject {
+class debugCollisionSendMessage : AsyncFunc {
 	int attachedRigidbody;
 	void update(const std::vector<AsyncMessage> messageList, const Scene* scene, Scene::Physics physics) {
 		Callback cb{};
@@ -86,16 +90,16 @@ class debugCollisionSendMessage : AsyncObject {
 	};
 };
 
-class SyncObject {
+class SyncFunc {
 public:
 	bool active = true;
 	virtual void update(Scene::Physics physics) { std::cout << "placeholder" << "\n"; };
 };
 
-class debugLogPosition : public SyncObject {
+class debugLogPosition : public SyncFunc {
 public:
 	int attachedRigidbody;
 	void update(Scene::Physics physics) {
-		std::cout << "transform:" << physics.world->getCollisionObjectArray()[attachedRigidbody]->getWorldTransform().getOrigin().z() << "\n";
+		//std::cout << "transform:" << physics.world->getCollisionObjectArray()[attachedRigidbody]->getWorldTransform().getOrigin().z() << "\n";
 	}
 };

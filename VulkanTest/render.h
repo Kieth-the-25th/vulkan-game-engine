@@ -41,6 +41,12 @@ namespace render
         glm::vec4 color;
     };
 
+    struct ShadowAtlasDescriptor {
+        glm::mat4* views;
+        glm::mat4* projs;
+        glm::vec4* colors;
+    };
+
     struct PushConstant {
         glm::mat4 model;
         glm::vec4 data;
@@ -171,8 +177,11 @@ namespace render
     class Light {
     public:
         glm::mat4 transform;
-        float FOV;
-        VkImage shMap;
+        double FOV;
+        glm::vec4 color;
+        std::vector<float> cascades;
+
+        /*VkImage shMap;
         VkImageView shMapView;
         VkSampler shMapSampler;
         VkDeviceMemory shMapMemory;
@@ -182,7 +191,7 @@ namespace render
 
         std::vector<DeviceBuffer> framePositions;
         std::vector<void*> mappedMemory;
-        std::vector<VkDescriptorSet> frameSets;
+        std::vector<VkDescriptorSet> frameSets;*/
 
         Light();
         Light(Drawer* d, glm::mat4 origin, float FOV, bool isDynamic);
@@ -206,6 +215,7 @@ namespace render
     /* A struct for each frame being rendered, does not correspond to the swapchain image of the same index.
      * Used for multiple frames in flight.
      */
+
     struct FrameOrderEntry {
     public:
         VkCommandBuffer frameCommandBuffer;
@@ -218,8 +228,8 @@ namespace render
         VkDeviceMemory uniformBufferMemory;
         VkBuffer vLightBuffer;
         VkDeviceMemory vLightMemory;
-        VkBuffer baseLightBuffer;
-        VkDeviceMemory baseLightBufferMemory;
+        VkBuffer dLightBuffer;
+        VkDeviceMemory dLightBufferMemory;
         VkDescriptorSet frameDescSet;
         void* uniformMappedMemory;
         void* lightMappedMemory;
@@ -279,7 +289,6 @@ namespace render
         VkFormat format;
         VkExtent2D extent;
 
-
         VkCommandBuffer commandBuffer;
 
         /* Vk & GLFW Objects*/
@@ -316,6 +325,17 @@ namespace render
         void init();
 
         /* Images */
+
+        int shadowMapSize = 4;
+        int shadowMapDetail = 1024;
+        VkImage shadowAtlas;
+        VkImageView shadowView;
+        VkSampler shadowSampler;
+        VkDeviceMemory shadowMapMemory;
+        std::vector<VkFramebuffer> shadowFrames;
+        std::vector<DeviceBuffer> shadowFramePositions;
+        std::vector<void*> shadowMappedMemory;
+        std::vector<VkDescriptorSet> shadowFrameSets;
 
         VkImage depthImage;
         VkImageView depthView;
@@ -354,30 +374,32 @@ namespace render
 
         const std::vector<Vertex> defaultBox = {
             {{0.5f, 0.5f, 0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f}},
-            {{0.5f, -0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},
+            {{0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},
             {{-0.5f, 0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f}},
-            {{-0.5f, -0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f}},
+            {{-0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f}},
 
-            {{0.5f, 0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f}},
+            {{0.5f, -0.5f, 0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f}},
             {{0.5f, -0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},
-            {{-0.5f, 0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f}},
+            {{-0.5f, -0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f}},
             {{-0.5f, -0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f}}
         };
 
         const std::vector<uint16_t> defaultIndices = {
-            {1, 0, 2, 1, 2, 3,
-            4, 5, 6, 6, 5, 7}
+            {1, 2, 0, 1, 3, 2,
+            4, 6, 5, 6, 7, 5}
         };
 
         void beginFrame(glm::mat4 cameraView, double FOV, std::vector<glm::mat4> lightViews, std::vector<double> lightFOVs);
         void beginPass(std::vector<VkClearValue> clearValues);
         void beginPass(VkFramebuffer frame, VkRenderPass pass, std::vector<VkClearValue> clearValues, VkExtent2D ext);
+        void beginPass(VkFramebuffer frame, VkRenderPass pass, std::vector<VkClearValue> clearValues, VkExtent2D ext, VkOffset2D offset);
 
         void bindShadowPassPipeline();
 
         void draw();
         void draw(Sprite* m);
         void draw(Mesh* m, Submesh* s, Material* mat, glm::mat4 modelMatrix, bool bindMaterial);
+        void draw(Mesh* m, Submesh* s, Material* mat, glm::mat4 modelMatrix, glm::vec4 data, bool bindMaterial);
 
         void endPass();
         void submitDraws();

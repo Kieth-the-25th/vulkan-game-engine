@@ -297,7 +297,7 @@ inline static VkCommandBuffer beginSimpleCommands(VkDevice device, VkCommandPool
     return buffer;
 }
 
-inline void endSimpleCommands(VkCommandBuffer buffer, VkQueue queue) {
+inline void endSimpleCommands(VkDevice device, VkCommandPool commandPool, VkCommandBuffer buffer, VkQueue queue) {
     vkEndCommandBuffer(buffer);
 
     VkSubmitInfo submitInfo{};
@@ -307,6 +307,7 @@ inline void endSimpleCommands(VkCommandBuffer buffer, VkQueue queue) {
 
     vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
     vkQueueWaitIdle(queue);
+    vkFreeCommandBuffers(device, commandPool, 1, &buffer);
 }
 
 inline void copyBuffer(VkDevice device, VkQueue queue, VkCommandPool pool, VkBuffer src, VkBuffer dst, VkBufferCopy copy) {
@@ -314,7 +315,7 @@ inline void copyBuffer(VkDevice device, VkQueue queue, VkCommandPool pool, VkBuf
 
     vkCmdCopyBuffer(buffer, src, dst, 1, &copy);
 
-    endSimpleCommands(buffer, queue);
+    endSimpleCommands(device, pool, buffer, queue);
 }
 
 inline void copyBuffer(VkDevice device, VkQueue queue, VkCommandPool pool, VkBuffer src, VkBuffer dst, VkDeviceSize size) {
@@ -403,7 +404,7 @@ inline void transitionImageLayout(VkDevice device, VkQueue queue, VkCommandPool 
 
     vkCmdPipelineBarrier(buffer, sourceStage, destinationStage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
 
-    endSimpleCommands(buffer, queue);
+    endSimpleCommands(device, cmdPool, buffer, queue);
 }
 
 inline VkShaderModule createShaderModule(VkDevice device, std::vector<char> code) {
@@ -472,8 +473,8 @@ namespace vkUtil {
         copyBuffer(device, queue, commandPool, stagingBuffer, dst, size);
     }
     
-    void endcpy(VkQueue queue) {
-        endSimpleCommands(currentCmdBuffer, queue);
+    void endcpy(VkDevice device, VkCommandPool pool, VkQueue queue) {
+        endSimpleCommands(device, pool, currentCmdBuffer, queue);
     }
 
     void free(VkDevice device) {
